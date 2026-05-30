@@ -14,6 +14,14 @@
 #include <cstring>
 #include <string>
 
+struct fan_node_group_t {
+    SceneNode* fan_node;
+    ImageNode* fan_background_node;
+    ImageNode* fan_light_node;
+    ImageNode* target_node;
+    ImageNode* flowing_arrow_node;
+};
+
 // -----------------------------------------------------------------------------
 // 主函数
 // -----------------------------------------------------------------------------
@@ -74,7 +82,7 @@ int main(int argc, char* argv[])
     SDL_Log("fan_light texture size: %dx%d", fan_light_tex_info.width, fan_light_tex_info.height);
 
     // ---------- 2b. 读取关键点文件 ----------
-    std::vector<Keypoint> keypoints = LoadKeypointsFromFile("images/results/target.txt");
+    std::vector<Keypoint> target_keypoints = LoadKeypointsFromFile("images/results/target.txt");
 
     // ---------- 3. 设置相机参数 ----------
     CameraIntrinsics intrinsics{
@@ -97,56 +105,55 @@ int main(int argc, char* argv[])
     // 单位：m
     Scene scene;
 
-    SceneNode* front_fan_center_node = CreateSceneNode(scene, 0.0, 0.0, 3.0, nullptr);
+    SceneNode* rune_base_node = CreateSceneNode(scene, 0.0, 0.0, 3.0, nullptr);
 
     ImageNode* front_center_R_node = CreateImageNode(scene,
                                         center_R_tex_info.texture, center_R_tex_info.width, center_R_tex_info.height,
                                         0.106, 0.106,
-                                        0.0, 0.0, -0.1664,
+                                        0.0, 0.0, -0.3328-0.1664,
                                         1.0f,
-                                        keypoints, front_fan_center_node, 2);
+                                        {}, rune_base_node, 2);
 
-    SceneNode* front_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_center_node);
+    SceneNode* front_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, -0.3328, rune_base_node);
 
-    SceneNode* front_fan_1_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_rotation_center_node);
+    std::vector<fan_node_group_t> fan_node_groups(5);
 
-    ImageNode* front_fan_background_1_node = CreateImageNode(scene,
-                                        fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
-                                        0.4151, 0.7419,
-                                        0.0, -0.1543-0.7419/2.0, 0.0,
-                                        1.0f,
-                                        keypoints, front_fan_1_node, 0);
+    for (int i = 0; i < 5; i += 1) {
+        double relative_rotate_rad = M_PI * 2.0 / 5.0 * i;
+        auto& fan_node_group = fan_node_groups[i];
 
-    ImageNode* front_fan_light_1_node = CreateImageNode(scene,
-                                        fan_light_tex_info.texture, fan_light_tex_info.width, fan_light_tex_info.height,
-                                        0.4151, 0.7419,
-                                        0.0, -0.1543-0.7419/2.0, 0.0,
-                                        1.0f,
-                                        keypoints, front_fan_1_node, 1);
+        fan_node_group.fan_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_rotation_center_node);
+        fan_node_group.fan_node -> SetLocalRotation(0.0, 0.0, relative_rotate_rad);
 
-    ImageNode* front_target_1_node = CreateImageNode(scene,
-                                        target_tex_info.texture, target_tex_info.width, target_tex_info.height,
-                                        0.3, 0.3,
-                                        0.0, -0.6996, 0.0,
-                                        1.0f,
-                                        keypoints, front_fan_1_node, 1);
-    
-    ImageNode* front_flowing_arrow_1_node = CreateImageNode(scene,
-                                        flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
-                                        0.06, 0.33,
-                                        0.0, -0.1543-0.02-0.33/2.0, 0.0,
-                                        1.0f,
-                                        keypoints, front_fan_1_node, 1);
+        fan_node_group.fan_background_node = CreateImageNode(scene,
+                                            fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
+                                            0.4151, 0.7419,
+                                            0.0, -0.1543-0.7419/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 0);
 
-    // 预渲染关键点序号纹理
-    std::vector<SDL_Texture*> index_textures(keypoints.size(), nullptr);
-    for (size_t i = 0; i < keypoints.size(); ++i) {
-        char idx_str[16];
-        std::snprintf(idx_str, sizeof(idx_str), "%d", keypoints[i].index);
-        index_textures[i] = RenderTextToTexture(renderer, idx_str,
-                                                  { 0.0f, 1.0f, 0.0f, 1.0f },
-                                                  0.8, 2);
+        fan_node_group.fan_light_node = CreateImageNode(scene,
+                                            fan_light_tex_info.texture, fan_light_tex_info.width, fan_light_tex_info.height,
+                                            0.4151, 0.7419,
+                                            0.0, -0.1543-0.7419/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 1);
+
+        fan_node_group.target_node = CreateImageNode(scene,
+                                            target_tex_info.texture, target_tex_info.width, target_tex_info.height,
+                                            0.3, 0.3,
+                                            0.0, -0.6996, 0.0,
+                                            1.0f,
+                                            target_keypoints, fan_node_group.fan_node, 1);
+        
+        fan_node_group.flowing_arrow_node = CreateImageNode(scene,
+                                            flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
+                                            0.06, 0.33,
+                                            0.0, -0.1543-0.02-0.33/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 1);
     }
+
 
     bool show_keypoints = false;
     int show_light_type = 0;
@@ -169,14 +176,6 @@ int main(int argc, char* argv[])
 
     float roll_speed = 1.5f;
     bool screenshot_requested = false;
-
-    // 关键点附加纹理缓存（由外部管理）
-    std::vector<SDL_Texture*> glo_textures(keypoints.size(), nullptr);
-    std::vector<SDL_Texture*> cam_textures(keypoints.size(), nullptr);
-    std::vector<SDL_Texture*> pix_textures(keypoints.size(), nullptr);
-    std::vector<std::string> cached_glo_texts(keypoints.size());
-    std::vector<std::string> cached_cam_texts(keypoints.size());
-    std::vector<std::string> cached_pix_texts(keypoints.size());
 
     // ---------- 6. 主循环 ----------
     SDL_Event event{};
@@ -313,25 +312,33 @@ int main(int argc, char* argv[])
         switch (show_light_type)
         {
         case 0:
-            front_fan_light_1_node -> SetAlpha(0.0);
-            front_flowing_arrow_1_node -> SetAlpha(0.0);
+            for (auto& fan_node_group : fan_node_groups) {
+                fan_node_group.fan_light_node -> SetAlpha(0.0);
+                fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+            }
             break;
         case 1:
-            front_fan_light_1_node -> SetAlpha(0.0);
-            front_flowing_arrow_1_node -> SetAlpha(1.0);
+            for (auto& fan_node_group : fan_node_groups) {
+                fan_node_group.fan_light_node -> SetAlpha(0.0);
+                fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
+            }
             break;
         case 2:
-            front_fan_light_1_node -> SetAlpha(1.0);
-            front_flowing_arrow_1_node -> SetAlpha(0.0);
+            for (auto& fan_node_group : fan_node_groups) {
+                fan_node_group.fan_light_node -> SetAlpha(1.0);
+                fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+            }
             break;
         
         default:
             break;
         }
         
-        front_flowing_arrow_1_node -> SetTextureOffset(
-            0.0,
-            front_flowing_arrow_1_node -> GetTextureOffsetY() + dt * 1.0
+
+        for (auto& fan_node_group : fan_node_groups) {
+            fan_node_group.flowing_arrow_node -> SetTextureOffset(
+                0.0,
+                fan_node_group.flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
         );
 
         // =============================================================
@@ -351,24 +358,20 @@ int main(int argc, char* argv[])
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
 
         // ---- Step 4: 关键点渲染 ----
-        if (show_keypoints && !keypoints.empty() && front_target_1_node) {
-            // 预计算关键点投影
-            std::vector<KeypointProjection> projections;
-            ComputeKeypointProjections(*front_target_1_node, intrinsics, distortion,
-                                       cam_pos, camera.yaw, camera.pitch, camera.roll,
-                                       projections);
+        if (show_keypoints)
+            for (auto& fan_node_group : fan_node_groups) {
+                auto* target_node = fan_node_group.target_node;
 
-            // 构建所有附加纹理（传入投影数据）
-            std::vector<std::vector<ExtraTextureInfo>> all_textures;
-            // BuildKeypointAllTextures(projections, renderer, index_textures,
-            //                          all_textures,
-            //                          cached_glo_texts, glo_textures,
-            //                          cached_cam_texts, cam_textures,
-            //                          cached_pix_texts, pix_textures);
-
-            front_target_1_node->RenderKeypoints(renderer, intrinsics, distortion,
-                                                 cam_pos, camera.yaw, camera.pitch, camera.roll,
-                                                 all_textures, {0.0, 1.0, 1.0, 1.0});
+                std::vector<KeypointProjection> projections;
+                ComputeKeypointProjections(*target_node, intrinsics, distortion,
+                                        cam_pos, camera.yaw, camera.pitch, camera.roll,
+                                        projections);
+                                        
+                std::vector<std::vector<ExtraTextureInfo>> all_textures;
+                target_node -> RenderKeypoints(renderer, intrinsics, distortion,
+                                               cam_pos, camera.yaw, camera.pitch, camera.roll,
+                                               all_textures, {0.0, 1.0, 1.0, 1.0});
+            };
         }
 
         // ---- Step 5: 截图 ----
@@ -385,18 +388,6 @@ int main(int argc, char* argv[])
     // ---------- 7. 清理 ----------
     if (mouse_grabbed) {
         SDL_SetWindowRelativeMouseMode(window, false);
-    }
-    for (auto* tex : index_textures) {
-        if (tex) SDL_DestroyTexture(tex);
-    }
-    for (auto* tex : glo_textures) {
-        if (tex) SDL_DestroyTexture(tex);
-    }
-    for (auto* tex : cam_textures) {
-        if (tex) SDL_DestroyTexture(tex);
-    }
-    for (auto* tex : pix_textures) {
-        if (tex) SDL_DestroyTexture(tex);
     }
     if (target_tex_info.texture) SDL_DestroyTexture(target_tex_info.texture);
     SDL_DestroyTexture(offscreen);
