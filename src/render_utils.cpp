@@ -180,11 +180,15 @@ void ComputeKeypointProjections(
 
     const float MAX_COORD = 1e6f;
 
+    // 预先计算世界 → 相机的旋转矩阵
+    double cam_rot[3][3];
+    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+
     for (size_t ki = 0; ki < keypoints.size(); ++ki) {
         KeypointProjection proj;
         proj.world_pt = node.GetKeypointWorldPos(ki);
-        proj.cam_pt = WorldToCameraTransform(proj.world_pt, cam_pos,
-                                             cam_yaw, cam_pitch, cam_roll);
+        proj.cam_pt = WorldToCameraTransform(proj.world_pt, cam_pos, cam_rot);
+
         if (proj.cam_pt.z <= 0.001) {
             proj.valid = false;
             out_projections.push_back(proj);

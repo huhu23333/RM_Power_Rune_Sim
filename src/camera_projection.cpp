@@ -233,12 +233,13 @@ static double FindFoldingRadiusInDirection(
 // 这样既处理了折叠（折叠半径就是该方向的最大有效输入），
 // 又保留了牛顿法在未折叠区域的精确性。
 // ---------------------------------------------------------------------------
-static double ComputeMaxAngleByBoundarySampling(
+std::pair<double, double> ComputeMaxAngleByBoundarySampling(
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion)
 {
     const int SAMPLES_PER_EDGE = 100;
     double max_angle = 0.0;
+    double max_tan = 0.0;
 
     double fx = intrinsics.fx;
     double fy = intrinsics.fy;
@@ -284,11 +285,12 @@ static double ComputeMaxAngleByBoundarySampling(
             double angle = std::atan(r_eff);
             if (angle > max_angle) {
                 max_angle = angle;
+                max_tan = r_eff;
             }
         }
     }
 
-    return max_angle;
+    return {max_angle, max_tan};
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +300,7 @@ static double ComputeMaxAngleByBoundarySampling(
 // 有切向畸变时：沿传感器边界密集采样，用牛顿迭代求逆完整畸变（含切向），
 //               取各方向最大角度作为 FOV（保证至少一个方向可达）
 // ---------------------------------------------------------------------------
-double ComputeMaxHalfFovAngle(
+std::pair<double, double> ComputeMaxHalfFovAngle(
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion)
 {
@@ -306,7 +308,7 @@ double ComputeMaxHalfFovAngle(
     static double cached_fx, cached_fy, cached_cx, cached_cy;
     static int    cached_width, cached_height;
     static double cached_k1, cached_k2, cached_p1, cached_p2, cached_k3;
-    static double cached_result;
+    static std::pair<double, double> cached_result;
     static bool   cache_valid = false;
 
     // 检查缓存是否仍然有效
@@ -334,12 +336,12 @@ double ComputeMaxHalfFovAngle(
         cached_k1 = distortion.k1; cached_k2 = distortion.k2;
         cached_p1 = distortion.p1; cached_p2 = distortion.p2;
         cached_k3 = distortion.k3;
-        cached_result = M_PI / 2.0;
+        cached_result = {M_PI / 2.0, 1e30};
         cache_valid = true;
-        return M_PI / 2.0;
+        return cached_result;
     }
 
-    double result;
+    std::pair<double, double>  result;
 
     if (distortion.p1 == 0.0 && distortion.p2 == 0.0) {
         // ---------- 只有径向畸变：使用高效的二分法 ----------
@@ -379,7 +381,7 @@ double ComputeMaxHalfFovAngle(
             }
             r = (low + high) * 0.5;
         }
-        result = std::atan(r);
+        result = {std::atan(r), r};
 
     } else {
         // ---------- 有切向畸变：沿边界采样求逆完整畸变 ----------
@@ -396,7 +398,7 @@ double ComputeMaxHalfFovAngle(
     cached_result = result;
     cache_valid = true;
 
-    return result;
+    return cached_result;
 }
 
 // ---------------------------------------------------------------------------
@@ -406,6 +408,12 @@ static double ComputeAngleFromAxis(const Point3D& point)
 {
     double radius = std::sqrt(point.x * point.x + point.y * point.y);
     return std::atan2(radius, point.z);
+}
+
+static double ComputeTanFromAxis(const Point3D& point)
+{
+    double radius = std::sqrt(point.x * point.x + point.y * point.y);
+    return radius / point.z;
 }
 
 // 应用径向 + 切向畸变
@@ -457,9 +465,9 @@ Point2D ProjectPoint(
 
         // 检查是否超出画面最大半视场角
         if (intrinsics.width > 0 && intrinsics.height > 0) {
-            double max_angle = ComputeMaxHalfFovAngle(intrinsics, distortion);
-            double point_angle = ComputeAngleFromAxis(point);
-            if (point_angle > max_angle) {
+            auto [max_angle, max_tan] = ComputeMaxHalfFovAngle(intrinsics, distortion);
+            double point_tan = ComputeTanFromAxis(point);
+            if (point_tan > max_tan) {
                 valid = false;
             }
         }

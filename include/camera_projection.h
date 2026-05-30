@@ -63,9 +63,9 @@ struct DistortionCoefficients
  *
  * @param intrinsics   相机内参（需包含 width 和 height）
  * @param distortion   畸变系数
- * @return double      最大半视场角（弧度），范围 (0, π/2]
+ * @return std::pair<double, double>      最大半视场角（弧度），范围 (0, π/2] , 上述值的正切值
  */
-double ComputeMaxHalfFovAngle(
+std::pair<double, double> ComputeMaxHalfFovAngle(
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion = DistortionCoefficients{});
 

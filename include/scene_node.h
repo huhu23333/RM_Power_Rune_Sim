@@ -8,6 +8,11 @@
 #include <memory>
 #include <string>
 
+void ComputeWorldToCameraMatrix(double yaw, double pitch, double roll, double rot[3][3]);
+void EulerToMatrix(double yaw, double pitch, double roll, double rot[3][3]);
+void MultiplyMatrix(const double a[3][3], const double b[3][3], double out[3][3]);
+void InverseRotationMatrix(const double r[3][3], double inv[3][3]);
+
 // -----------------------------------------------------------------------------
 // 附加纹理信息（用于关键点渲染时在外部管理的附加纹理）
 // -----------------------------------------------------------------------------
@@ -109,8 +114,8 @@ struct RenderFace {
     SDL_FColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
 
-const double SUBDIV_SCALE = 0.005;
-const int SUBDIV_MAXNUM = 64;
+const double SUBDIV_SCALE = 0.05;
+const int SUBDIV_MAXNUM = 16;
 
 // 工具函数
 void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
@@ -120,7 +125,7 @@ void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
                         float uv_r, float uv_b);
 
 Point3D WorldToCameraTransform(const Point3D& world_pt, const Point3D& cam_pos,
-                                double yaw, double pitch, double roll);
+                               const double cam_rot[3][3]);
 
 void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, SDL_FColor color);
 

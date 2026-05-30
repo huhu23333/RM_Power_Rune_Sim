@@ -102,7 +102,7 @@ int main(int argc, char* argv[])
     };
     DistortionCoefficients distortion{0.0, 0.0, 0.0, 0.0, 0.0};
 
-    double max_half_fov = ComputeMaxHalfFovAngle(intrinsics, distortion);
+    double max_half_fov = ComputeMaxHalfFovAngle(intrinsics, distortion).first;
     SDL_Log("Max half FOV angle (w/ distortion): %.2f deg",
             max_half_fov * 180.0 / M_PI);
     double diagonal_fov = 2.0 * std::atan(
