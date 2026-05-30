@@ -110,7 +110,7 @@ int main(int argc, char* argv[])
                     tex_info.texture, tex_info.width, tex_info.height,
                     base_width, base_height,
                     0.0, 0.0, rect_depth,
-                    1.0f, 0.04f, { 1.0f, 1.0f, 0.39f, 1.0f },
+                    1.0f,
                     {}, nullptr);
 
     // ===== 4b. 后方纹理图像（半透明，可本体旋转） =====
@@ -119,7 +119,7 @@ int main(int argc, char* argv[])
                                            tex_info.texture, tex_info.width, tex_info.height,
                                            base_width, base_height,
                                            0.0, 0.0, back_z,
-                                           0.7f, 0.0, { 1.0f, 1.0f, 0.39f, 1.0f },
+                                           0.7f,
                                            {}, nullptr);
 
     // ===== 4c. target 图像（作为 BackImage 的子节点） =====
@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
                                              target_tex_info.texture, target_tex_info.width, target_tex_info.height,
                                              target_base_width, target_base_height,
                                              0.0, 0.0, target_local_z,
-                                             1.0f, 0.0, { 1.0f, 1.0f, 0.39f, 1.0f },
+                                             1.0f,
                                              keypoints, back_node);
 
     // 预渲染关键点序号纹理

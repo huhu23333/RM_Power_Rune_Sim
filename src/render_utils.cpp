@@ -53,8 +53,6 @@ ImageNode* CreateImageNode(
     double display_w, double display_h,
     double pos_x, double pos_y, double pos_z,
     float alpha,
-    double border_width,
-    SDL_FColor border_color,
     const std::vector<Keypoint>& keypoints,
     SceneNode* parent)
 {
@@ -64,8 +62,6 @@ ImageNode* CreateImageNode(
     img_node->SetDisplaySize(display_w, display_h);
     img_node->SetLocalPosition(pos_x, pos_y, pos_z);
     img_node->SetAlpha(alpha);
-    img_node->SetBorderWidth(border_width);
-    img_node->SetBorderColor(border_color);
 
     if (!keypoints.empty()) {
         img_node->SetKeypoints(keypoints);

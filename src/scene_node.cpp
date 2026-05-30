@@ -309,9 +309,6 @@ void ImageNode::SetDisplaySize(double width, double height)
 void ImageNode::SetAlpha(float alpha) { m_alpha = alpha; }
 float ImageNode::GetAlpha() const { return m_alpha; }
 
-void ImageNode::SetBorderWidth(double w) { m_border_width = w; }
-void ImageNode::SetBorderColor(SDL_FColor c) { m_border_color = c; }
-
 const std::vector<RenderFace>& ImageNode::GetFaces() const { return m_faces; }
 std::vector<RenderFace>& ImageNode::GetFaces() { return m_faces; }
 
@@ -411,50 +408,6 @@ void ImageNode::UpdateFaces()
         m_faces.push_back(std::move(face));
     }
 
-    if (m_border_width > 0.0) {
-        SDL_FColor bc = m_border_color;
-
-        {
-            RenderFace face;
-            BuildFaceTriangles(face.world_verts,
-                               -(hw + m_border_width / 2.0), 0, 0,
-                               m_border_width, m_display_height,
-                               0, 0, 0, 0);
-            face.texture = nullptr;
-            face.color = bc;
-            m_faces.push_back(std::move(face));
-        }
-        {
-            RenderFace face;
-            BuildFaceTriangles(face.world_verts,
-                               (hw + m_border_width / 2.0), 0, 0,
-                               m_border_width, m_display_height,
-                               0, 0, 0, 0);
-            face.texture = nullptr;
-            face.color = bc;
-            m_faces.push_back(std::move(face));
-        }
-        {
-            RenderFace face;
-            BuildFaceTriangles(face.world_verts,
-                               0, (hh + m_border_width / 2.0), 0,
-                               m_display_width + 2.0 * m_border_width, m_border_width,
-                               0, 0, 0, 0);
-            face.texture = nullptr;
-            face.color = bc;
-            m_faces.push_back(std::move(face));
-        }
-        {
-            RenderFace face;
-            BuildFaceTriangles(face.world_verts,
-                               0, -(hh + m_border_width / 2.0), 0,
-                               m_display_width + 2.0 * m_border_width, m_border_width,
-                               0, 0, 0, 0);
-            face.texture = nullptr;
-            face.color = bc;
-            m_faces.push_back(std::move(face));
-        }
-    }
 }
 
 void ImageNode::Render(SDL_Renderer* renderer,

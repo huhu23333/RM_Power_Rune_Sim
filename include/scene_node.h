@@ -143,9 +143,6 @@ public:
     void SetAlpha(float alpha);
     float GetAlpha() const;
 
-    void SetBorderWidth(double w);
-    void SetBorderColor(SDL_FColor c);
-
     const std::vector<RenderFace>& GetFaces() const;
     std::vector<RenderFace>& GetFaces();
 
@@ -185,8 +182,6 @@ private:
     double m_display_width = 2.0;
     double m_display_height = 2.0;
     float m_alpha = 1.0f;
-    double m_border_width = 0.0;
-    SDL_FColor m_border_color = { 1.0f, 1.0f, 0.39f, 1.0f };
     std::vector<RenderFace> m_faces;
     std::vector<Keypoint> m_keypoints;
 };

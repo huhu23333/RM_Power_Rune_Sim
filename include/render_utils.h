@@ -41,8 +41,6 @@ SDL_Texture* RenderTextToTexture(SDL_Renderer* renderer, const char* text,
  * @param display_w, display_h  世界坐标显示尺寸
  * @param pos_x, pos_y, pos_z   局部坐标位置
  * @param alpha          透明度 [0, 1]
- * @param border_width   边框宽度（0 无边框）
- * @param border_color   边框颜色
  * @param keypoints      关键点列表（可空）
  * @param parent         父节点指针（nullptr 表示无父节点）
  * @return ImageNode*    创建的节点指针
@@ -53,8 +51,6 @@ ImageNode* CreateImageNode(
     double display_w, double display_h,
     double pos_x, double pos_y, double pos_z,
     float alpha = 1.0f,
-    double border_width = 0.0,
-    SDL_FColor border_color = { 1.0f, 1.0f, 0.39f, 1.0f },
     const std::vector<Keypoint>& keypoints = {},
     SceneNode* parent = nullptr);
 
