@@ -58,7 +58,8 @@ SceneNode* CreateSceneNode(
     SceneNode* added_ptr = scene.AddNode(std::move(node));
 
     if (parent) {
-        added_ptr->SetParent(parent);
+        added_ptr -> SetParent(parent);
+        parent -> AddChild(added_ptr);
     }
 
     return added_ptr;
@@ -88,7 +89,8 @@ ImageNode* CreateImageNode(
     SceneNode* added_ptr = scene.AddNode(std::move(img_node));
 
     if (parent) {
-        added_ptr->SetParent(parent);
+        added_ptr -> SetParent(parent);
+        parent -> AddChild(added_ptr);
     }
 
     return dynamic_cast<ImageNode*>(added_ptr);

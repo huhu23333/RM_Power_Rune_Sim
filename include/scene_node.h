@@ -13,9 +13,9 @@
 // -----------------------------------------------------------------------------
 struct ExtraTextureInfo
 {
-    SDL_Texture* texture = nullptr;  // 预渲染的纹理
-    float offset_x = 0.0f;           // 相对于关键点中心的 X 偏移（屏幕像素）
-    float offset_y = 0.0f;           // 相对于关键点中心的 Y 偏移（屏幕像素）
+    SDL_Texture* texture = nullptr;
+    float offset_x = 0.0f;
+    float offset_y = 0.0f;
 };
 
 // -----------------------------------------------------------------------------
@@ -56,9 +56,18 @@ public:
     void SetLocalPosition(double x, double y, double z);
     void SetLocalRotation(double yaw, double pitch, double roll);
 
+    // 世界变换相关（直接通过矩阵乘法计算）
     Point3D LocalToWorld(const Point3D& local_pt) const;
     Point3D WorldToLocal(const Point3D& world_pt) const;
     Point3D ChildLocalToWorld(const Point3D& child_local, const SceneNode* child) const;
+
+    // 根据 m_local 计算局部矩阵
+    bool UpdateLocalMatrix();
+    // 更新世界变换（递归）
+    void UpdateWorldTransform(const SceneNode* parent = nullptr, bool parent_updated = false);
+
+    // 标记当前节点的局部变换已改变
+    void MarkTransformDirty();
 
     virtual void Render(SDL_Renderer* renderer,
                         const CameraIntrinsics& intrinsics,
@@ -73,7 +82,17 @@ public:
 protected:
     SceneNode* m_parent = nullptr;
     std::vector<SceneNode*> m_children;
-    Transform3D m_local;
+    Transform3D m_local;                 // 原始欧拉角/平移（用户接口）
+
+    // 矩阵缓存（从 m_local 计算得到）
+    double m_local_rot[3][3];    // 局部旋转矩阵
+    double m_local_trans[3];     // 局部平移向量
+
+    // 世界变换矩阵（局部 → 世界）
+    double m_world_rot[3][3];    // 世界旋转矩阵
+    double m_world_trans[3];     // 世界平移向量
+
+    bool m_transform_dirty;      // 局部矩阵是否需要重新计算
 };
 
 // -----------------------------------------------------------------------------
@@ -144,8 +163,6 @@ public:
     void SetAlpha(float alpha);
     float GetAlpha() const;
 
-    /// 设置纹理偏移量（占纹理边长的比例）。图像会按给定比例循环折叠偏移。
-    /// offset_x, offset_y 取值范围不限，内部自动归一化到 [0, 1)。
     void SetTextureOffset(float offset_x, float offset_y);
     float GetTextureOffsetX() const;
     float GetTextureOffsetY() const;
@@ -193,8 +210,8 @@ private:
     double m_display_width = 2.0;
     double m_display_height = 2.0;
     float m_alpha = 1.0f;
-    float m_offset_x = 0.0f;   // U方向偏移比例
-    float m_offset_y = 0.0f;   // V方向偏移比例
+    float m_offset_x = 0.0f;
+    float m_offset_y = 0.0f;
     std::vector<RenderFace> m_faces;
     std::vector<Keypoint> m_keypoints;
     int render_priority = 0;
@@ -211,6 +228,9 @@ public:
 
     SceneNode* AddNode(SceneNodePtr node);
     std::vector<SceneNode*> GetRootNodes() const;
+
+    // 更新所有节点的世界变换（基于脏标记）
+    void UpdateAllTransforms();
 
     void RenderAll(SDL_Renderer* renderer,
                    const CameraIntrinsics& intrinsics,

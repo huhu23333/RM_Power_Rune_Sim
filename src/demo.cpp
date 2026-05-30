@@ -311,35 +311,37 @@ int main(int argc, char* argv[])
         // ---------- 图像更新 ----------
         switch (show_light_type)
         {
-        case 0:
-            for (auto& fan_node_group : fan_node_groups) {
-                fan_node_group.fan_light_node -> SetAlpha(0.0);
-                fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-            }
-            break;
-        case 1:
-            for (auto& fan_node_group : fan_node_groups) {
-                fan_node_group.fan_light_node -> SetAlpha(0.0);
-                fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
-            }
-            break;
-        case 2:
-            for (auto& fan_node_group : fan_node_groups) {
-                fan_node_group.fan_light_node -> SetAlpha(1.0);
-                fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-            }
-            break;
-        
-        default:
-            break;
+            case 0:
+                for (auto& fan_node_group : fan_node_groups) {
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                }
+                break;
+            case 1:
+                for (auto& fan_node_group : fan_node_groups) {
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
+                }
+                break;
+            case 2:
+                for (auto& fan_node_group : fan_node_groups) {
+                    fan_node_group.fan_light_node -> SetAlpha(1.0);
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                }
+                break;
+            
+            default:
+                break;
         }
         
-
         for (auto& fan_node_group : fan_node_groups) {
             fan_node_group.flowing_arrow_node -> SetTextureOffset(
                 0.0,
                 fan_node_group.flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
         );
+
+        // 更新所有场景节点的世界变换矩阵
+        scene.UpdateAllTransforms();
 
         // =============================================================
         // 渲染步骤：离屏渲染 → 覆盖层 → 截图 → 显示

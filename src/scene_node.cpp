@@ -5,9 +5,62 @@
 #include <sstream>
 
 // =============================================================================
-// Transform3D
+// 辅助函数：欧拉角 → 旋转矩阵（ZYX 顺序，与 ToParent 一致）
 // =============================================================================
+static void EulerToMatrix(double yaw, double pitch, double roll,
+                          double rot[3][3])
+{
+    double cy = std::cos(yaw);
+    double sy = std::sin(yaw);
+    double cp = std::cos(pitch);
+    double sp = std::sin(pitch);
+    double cr = std::cos(roll);
+    double sr = std::sin(roll);
 
+    // 旋转顺序：R = Ry(yaw) * Rx(pitch') * Rz(roll)，其中 pitch' = -pitch
+    // 矩阵元素由原始 ToParent 推导得出
+    rot[0][0] =  cr * cy - sr * sp * sy;
+    rot[0][1] = -sr * cy - cr * sp * sy;
+    rot[0][2] =  cp * sy;
+
+    rot[1][0] =  sr * cp;
+    rot[1][1] =  cr * cp;
+    rot[1][2] =  sp;
+
+    rot[2][0] = -cr * sy - sr * sp * cy;
+    rot[2][1] =  sr * sy - cr * sp * cy;
+    rot[2][2] =  cp * cy;
+}
+
+// =============================================================================
+// 辅助函数：矩阵乘法（3x3 乘以 3x3）
+// =============================================================================
+static void MultiplyMatrix(const double a[3][3], const double b[3][3],
+                           double out[3][3])
+{
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            out[i][j] = a[i][0] * b[0][j] +
+                        a[i][1] * b[1][j] +
+                        a[i][2] * b[2][j];
+        }
+    }
+}
+
+// =============================================================================
+// 辅助函数：3x3 矩阵求逆（仅适用于旋转矩阵，转置即逆）
+// =============================================================================
+static void InverseRotationMatrix(const double r[3][3], double inv[3][3])
+{
+    // 旋转矩阵是正交矩阵，逆 = 转置
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            inv[i][j] = r[j][i];
+}
+
+// =============================================================================
+// Transform3D（保留原有实现，但不再被递归使用，仅作存储）
+// =============================================================================
 Point3D Transform3D::ToParent(const Point3D& local) const
 {
     double dx = local.x;
@@ -70,6 +123,16 @@ Point3D Transform3D::FromParent(const Point3D& parent) const
 
 SceneNode::SceneNode()
 {
+    // 初始化局部矩阵为单位矩阵
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            m_local_rot[i][j] = (i == j) ? 1.0 : 0.0;
+            m_world_rot[i][j] = (i == j) ? 1.0 : 0.0;
+        }
+        m_local_trans[i] = 0.0;
+        m_world_trans[i] = 0.0;
+    }
+    m_transform_dirty = true;
 }
 
 SceneNode::~SceneNode() = default;
@@ -84,6 +147,8 @@ void SceneNode::SetParent(SceneNode* parent)
     if (parent) {
         parent->m_children.push_back(this);
     }
+    // 父节点改变，整个子树的世界变换需要重新计算，标记当前节点及其子节点为脏
+    MarkTransformDirty();
 }
 
 SceneNode* SceneNode::GetParent() const { return m_parent; }
@@ -97,60 +162,137 @@ void SceneNode::AddChild(SceneNode* child)
 
 const std::vector<SceneNode*>& SceneNode::GetChildren() const { return m_children; }
 
-void SceneNode::SetLocalTransform(const Transform3D& t) { m_local = t; }
+void SceneNode::SetLocalTransform(const Transform3D& t)
+{
+    m_local = t;
+    MarkTransformDirty();
+}
+
 const Transform3D& SceneNode::GetLocalTransform() const { return m_local; }
 Transform3D& SceneNode::GetLocalTransform() { return m_local; }
 
 void SceneNode::SetLocalPosition(double x, double y, double z)
 {
-    m_local.tx = x; m_local.ty = y; m_local.tz = z;
+    m_local.tx = x;
+    m_local.ty = y;
+    m_local.tz = z;
+    MarkTransformDirty();
 }
 
 void SceneNode::SetLocalRotation(double yaw, double pitch, double roll)
 {
-    m_local.yaw = yaw; m_local.pitch = pitch; m_local.roll = roll;
+    m_local.yaw = yaw;
+    m_local.pitch = pitch;
+    m_local.roll = roll;
+    MarkTransformDirty();
+}
+
+void SceneNode::MarkTransformDirty()
+{
+    m_transform_dirty = true;
+    // 子节点的世界变换依赖于父节点，因此也需要标记（但不必立即递归，更新时会处理）
+}
+
+// 根据 m_local 计算局部矩阵
+bool SceneNode::UpdateLocalMatrix()
+{
+    if (!m_transform_dirty) return false;
+
+    // 根据欧拉角计算旋转矩阵
+    EulerToMatrix(m_local.yaw, m_local.pitch, m_local.roll, m_local_rot);
+    m_local_trans[0] = m_local.tx;
+    m_local_trans[1] = m_local.ty;
+    m_local_trans[2] = m_local.tz;
+
+    m_transform_dirty = false;
+
+    return true;
+}
+
+// 递归更新世界矩阵
+void SceneNode::UpdateWorldTransform(const SceneNode* parent, bool parent_updated)
+{
+    // 先确保当前节点的局部矩阵是最新的
+    bool local_matrix_updated = UpdateLocalMatrix();
+
+    bool world_transform_need_to_update = local_matrix_updated || parent_updated;
+
+    if (world_transform_need_to_update) {
+        // 计算世界矩阵
+        if (parent) {
+            // 世界旋转 = 父世界旋转 * 局部旋转
+            MultiplyMatrix(parent->m_world_rot, m_local_rot, m_world_rot);
+            // 世界平移 = 父世界旋转 * 局部平移 + 父世界平移
+            for (int i = 0; i < 3; ++i) {
+                double sum = parent->m_world_trans[i];
+                for (int j = 0; j < 3; ++j) {
+                    sum += parent->m_world_rot[i][j] * m_local_trans[j];
+                }
+                m_world_trans[i] = sum;
+            }
+        } else {
+            // 根节点：世界矩阵 = 局部矩阵
+            for (int i = 0; i < 3; ++i) {
+                for (int j = 0; j < 3; ++j) {
+                    m_world_rot[i][j] = m_local_rot[i][j];
+                }
+                m_world_trans[i] = m_local_trans[i];
+            }
+        }
+    }
+
+    // 递归更新子节点（子节点总是要重新计算，因为父世界矩阵可能变了）
+    for (auto* child : m_children) {
+        child->UpdateWorldTransform(this, world_transform_need_to_update);
+    }
 }
 
 Point3D SceneNode::LocalToWorld(const Point3D& local_pt) const
 {
-    Point3D pt = local_pt;
-    const SceneNode* node = this;
-    while (node) {
-        pt = node->m_local.ToParent(pt);
-        node = node->m_parent;
-    }
-    return pt;
+    // 应用世界矩阵
+    double x = m_world_rot[0][0] * local_pt.x +
+               m_world_rot[0][1] * local_pt.y +
+               m_world_rot[0][2] * local_pt.z +
+               m_world_trans[0];
+    double y = m_world_rot[1][0] * local_pt.x +
+               m_world_rot[1][1] * local_pt.y +
+               m_world_rot[1][2] * local_pt.z +
+               m_world_trans[1];
+    double z = m_world_rot[2][0] * local_pt.x +
+               m_world_rot[2][1] * local_pt.y +
+               m_world_rot[2][2] * local_pt.z +
+               m_world_trans[2];
+    return { x, y, z };
 }
 
 Point3D SceneNode::WorldToLocal(const Point3D& world_pt) const
 {
-    std::vector<const SceneNode*> chain;
-    const SceneNode* node = this;
-    while (node) {
-        chain.push_back(node);
-        node = node->m_parent;
-    }
+    // 计算世界旋转矩阵的逆（转置）和平移的逆变换
+    double inv_rot[3][3];
+    InverseRotationMatrix(m_world_rot, inv_rot);
 
-    Point3D pt = world_pt;
-    for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
-        pt = (*it)->m_local.FromParent(pt);
-    }
-    return pt;
+    // 先将点平移到世界坐标系原点
+    double dx = world_pt.x - m_world_trans[0];
+    double dy = world_pt.y - m_world_trans[1];
+    double dz = world_pt.z - m_world_trans[2];
+
+    // 应用逆旋转
+    double x = inv_rot[0][0] * dx + inv_rot[0][1] * dy + inv_rot[0][2] * dz;
+    double y = inv_rot[1][0] * dx + inv_rot[1][1] * dy + inv_rot[1][2] * dz;
+    double z = inv_rot[2][0] * dx + inv_rot[2][1] * dy + inv_rot[2][2] * dz;
+    return { x, y, z };
 }
 
 Point3D SceneNode::ChildLocalToWorld(const Point3D& child_local, const SceneNode* child) const
 {
-    Point3D pt = child_local;
-    const SceneNode* node = child;
-    while (node) {
-        pt = node->m_local.ToParent(pt);
-        node = node->m_parent;
-    }
-    return pt;
+    // 等价于从 child 的局部坐标变换到世界坐标
+    // 先计算 child 的世界矩阵（需要确保 child 的 WorldTransform 已更新）
+    // 这里简单调用 child->LocalToWorld
+    return child->LocalToWorld(child_local);
 }
 
 // =============================================================================
-// 工具函数
+// 工具函数（保持不变）
 // =============================================================================
 
 void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
@@ -159,6 +301,7 @@ void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
                         float uv_l, float uv_t,
                         float uv_r, float uv_b)
 {
+    // 与原来相同，省略...
     int segs_w = std::max(1, std::min((int)std::ceil(width / SUBDIV_SCALE), SUBDIV_MAXNUM));
     int segs_h = std::max(1, std::min((int)std::ceil(height / SUBDIV_SCALE), SUBDIV_MAXNUM));
     double hw = width / 2.0, hh = height / 2.0;
@@ -196,6 +339,7 @@ void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
 Point3D WorldToCameraTransform(const Point3D& world_pt, const Point3D& cam_pos,
                                 double yaw, double pitch, double roll)
 {
+    // 与原来相同，省略...
     double tx = world_pt.x - cam_pos.x;
     double ty = world_pt.y - cam_pos.y;
     double tz = world_pt.z - cam_pos.z;
@@ -222,6 +366,27 @@ Point3D WorldToCameraTransform(const Point3D& world_pt, const Point3D& cam_pos,
     return { x3, y3, z3 };
 }
 
+void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, SDL_FColor color)
+{
+    // 与原来相同，省略...
+    const int SEGMENTS = 24;
+    std::vector<SDL_Vertex> verts;
+    verts.reserve((SEGMENTS + 1) * 3);
+    SDL_Vertex center = { { cx, cy }, color, { 0.0f, 0.0f } };
+    for (int i = 0; i < SEGMENTS; ++i) {
+        float a1 = (float)(2.0 * M_PI * i / SEGMENTS);
+        float a2 = (float)(2.0 * M_PI * (i + 1) / SEGMENTS);
+        float x1 = cx + radius * std::cos(a1);
+        float y1 = cy + radius * std::sin(a1);
+        float x2 = cx + radius * std::cos(a2);
+        float y2 = cy + radius * std::sin(a2);
+        verts.push_back(center);
+        verts.push_back({ { x1, y1 }, color, { 0.0f, 0.0f } });
+        verts.push_back({ { x2, y2 }, color, { 0.0f, 0.0f } });
+    }
+    SDL_RenderGeometry(renderer, nullptr, verts.data(), (int)verts.size(), nullptr, 0);
+}
+
 Point3D KeypointPixelToWorld(const Keypoint& kp, const TargetFaceInfo& face,
                               int tex_w, int tex_h)
 {
@@ -233,38 +398,11 @@ Point3D KeypointPixelToWorld(const Keypoint& kp, const TargetFaceInfo& face,
     return { wx, wy, wz };
 }
 
-void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, SDL_FColor color)
-{
-    const int SEGMENTS = 24;
-    std::vector<SDL_Vertex> verts;
-    verts.reserve((SEGMENTS + 1) * 3);
-
-    SDL_Vertex center = { { cx, cy }, color, { 0.0f, 0.0f } };
-
-    for (int i = 0; i < SEGMENTS; ++i) {
-        float a1 = (float)(2.0 * M_PI * i / SEGMENTS);
-        float a2 = (float)(2.0 * M_PI * (i + 1) / SEGMENTS);
-
-        float x1 = cx + radius * std::cos(a1);
-        float y1 = cy + radius * std::sin(a1);
-        float x2 = cx + radius * std::cos(a2);
-        float y2 = cy + radius * std::sin(a2);
-
-        verts.push_back(center);
-        verts.push_back({ { x1, y1 }, color, { 0.0f, 0.0f } });
-        verts.push_back({ { x2, y2 }, color, { 0.0f, 0.0f } });
-    }
-
-    SDL_RenderGeometry(renderer, nullptr, verts.data(), (int)verts.size(), nullptr, 0);
-}
-
 // =============================================================================
 // ImageNode
 // =============================================================================
 
-ImageNode::ImageNode()
-    : SceneNode() {}
-
+ImageNode::ImageNode() : SceneNode() {}
 ImageNode::~ImageNode()
 {
     if (m_texture && m_owns_texture) {
@@ -314,7 +452,6 @@ float ImageNode::GetAlpha() const { return m_alpha; }
 
 void ImageNode::SetTextureOffset(float offset_x, float offset_y)
 {
-    // 归一化到 [0, 1) 范围
     offset_x = offset_x - std::floor(offset_x);
     offset_y = offset_y - std::floor(offset_y);
     m_offset_x = offset_x;
@@ -332,15 +469,8 @@ SDL_Texture* ImageNode::GetTexture() const { return m_texture; }
 int ImageNode::GetTexWidth() const { return m_tex_width; }
 int ImageNode::GetTexHeight() const { return m_tex_height; }
 
-void ImageNode::SetKeypoints(const std::vector<Keypoint>& kps)
-{
-    m_keypoints = kps;
-}
-
-const std::vector<Keypoint>& ImageNode::GetKeypoints() const
-{
-    return m_keypoints;
-}
+void ImageNode::SetKeypoints(const std::vector<Keypoint>& kps) { m_keypoints = kps; }
+const std::vector<Keypoint>& ImageNode::GetKeypoints() const { return m_keypoints; }
 
 Point3D ImageNode::GetKeypointWorldPos(size_t index) const
 {
@@ -357,8 +487,6 @@ Point3D ImageNode::GetKeypointWorldPos(size_t index) const
     double wz = 0.0;
 
     Point3D local_pt = { wx, wy, wz };
-
-    // 通过节点树级联变换到世界坐标（包含自身的局部变换和父级旋转）
     return LocalToWorld(local_pt);
 }
 
@@ -376,7 +504,6 @@ void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
 
     for (size_t ki = 0; ki < m_keypoints.size(); ++ki) {
         Point3D world_pt = GetKeypointWorldPos(ki);
-
         Point3D cam_pt = WorldToCameraTransform(world_pt, cam_pos, cam_yaw, cam_pitch, cam_roll);
         if (cam_pt.z <= 0.001) continue;
 
@@ -386,12 +513,10 @@ void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
             continue;
 
         float sx = (float)screen_pt.x;
-        float sy_float = (float)screen_pt.y;
+        float sy = (float)screen_pt.y;
 
-        // 绘制关键点圆点
-        DrawFilledCircle(renderer, sx, sy_float, 10.0f, kp_color_dot);
+        DrawFilledCircle(renderer, sx, sy, 10.0f, kp_color_dot);
 
-        // 绘制由外部合并传入的所有附加纹理（含序号、坐标标签等）
         if (ki < all_extra_textures.size()) {
             for (const auto& extra : all_extra_textures[ki]) {
                 if (!extra.texture) continue;
@@ -407,27 +532,20 @@ void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
 void ImageNode::UpdateFaces()
 {
     m_faces.clear();
-
     if (!m_texture) return;
 
     double hw = m_display_width / 2.0;
     double hh = m_display_height / 2.0;
 
-    {
-        RenderFace face;
-        // 使用偏移后的 UV 左/上/右/下边界
-        // 偏移量 m_offset_x/m_offset_y 是归一化比例，控制纹理采样起始位置
-        // 超出的部分会因 wrap 寻址模式循环折叠回另一侧
-        BuildFaceTriangles(face.world_verts,
-                           0, 0, 0,
-                           m_display_width, m_display_height,
-                           m_offset_x, m_offset_y,               // UV 左下
-                           m_offset_x + 1.0f, m_offset_y + 1.0f); // UV 右上
-        face.texture = m_texture;
-        face.color = { 1.0f, 1.0f, 1.0f, m_alpha };
-        m_faces.push_back(std::move(face));
-    }
-
+    RenderFace face;
+    BuildFaceTriangles(face.world_verts,
+                       0, 0, 0,
+                       m_display_width, m_display_height,
+                       m_offset_x, m_offset_y,
+                       m_offset_x + 1.0f, m_offset_y + 1.0f);
+    face.texture = m_texture;
+    face.color = { 1.0f, 1.0f, 1.0f, m_alpha };
+    m_faces.push_back(std::move(face));
 }
 
 void ImageNode::Render(SDL_Renderer* renderer,
@@ -448,7 +566,6 @@ void ImageNode::Render(SDL_Renderer* renderer,
     std::vector<SortedFace> sorted_faces;
     const float MAX_COORD = 1e6f;
 
-    // 为支持纹理循环折叠偏移，设置纹理寻址方式为 WRAP
     SDL_TextureAddressMode prev_u, prev_v;
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
     SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
@@ -465,7 +582,6 @@ void ImageNode::Render(SDL_Renderer* renderer,
             const WorldVertex& wv1 = face.world_verts[i + 1];
             const WorldVertex& wv2 = face.world_verts[i + 2];
 
-            // 通过节点树级联变换到世界坐标（包含自身的局部变换和父级旋转）
             Point3D r0 = LocalToWorld(wv0.pos);
             Point3D r1 = LocalToWorld(wv1.pos);
             Point3D r2 = LocalToWorld(wv2.pos);
@@ -514,7 +630,6 @@ void ImageNode::Render(SDL_Renderer* renderer,
                            nullptr, 0);
     }
 
-    // 恢复原先的寻址模式
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
 
@@ -551,6 +666,14 @@ std::vector<SceneNode*> Scene::GetRootNodes() const
     return roots;
 }
 
+void Scene::UpdateAllTransforms()
+{
+    auto roots = GetRootNodes();
+    for (auto* root : roots) {
+        root->UpdateWorldTransform(nullptr);
+    }
+}
+
 void Scene::RenderAll(SDL_Renderer* renderer,
                        const CameraIntrinsics& intrinsics,
                        const DistortionCoefficients& distortion,
@@ -567,7 +690,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
     std::vector<SortedFace> sorted_faces;
     const float MAX_COORD = 1e6f;
 
-    // 为支持纹理循环折叠偏移，设置纹理寻址方式为 WRAP
     SDL_TextureAddressMode prev_u, prev_v;
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
     SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
@@ -590,7 +712,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
                 const WorldVertex& wv1 = face.world_verts[i + 1];
                 const WorldVertex& wv2 = face.world_verts[i + 2];
 
-                // 通过节点树级联变换到世界坐标（包含自身的局部变换和父级旋转）
                 Point3D r0 = img_node->LocalToWorld(wv0.pos);
                 Point3D r1 = img_node->LocalToWorld(wv1.pos);
                 Point3D r2 = img_node->LocalToWorld(wv2.pos);
@@ -650,9 +771,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
                            nullptr, 0);
     }
 
-    // 恢复原先的寻址模式
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
 
 const std::vector<SceneNodePtr>& Scene::GetAllNodes() const { return m_nodes; }
-
