@@ -166,7 +166,8 @@ public:
                           const DistortionCoefficients& distortion,
                           const Point3D& cam_pos,
                           double cam_yaw, double cam_pitch, double cam_roll,
-                          const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures) const;
+                          const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
+                          SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f }) const;
 
     void Render(SDL_Renderer* renderer,
                 const CameraIntrinsics& intrinsics,

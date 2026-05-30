@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
     const int WINDOW_HEIGHT = 1080;
 
     SDL_Window* window = SDL_CreateWindow(
-        "Demo - RM Ruin",
+        "Demo - RM Power Rune",
         WINDOW_WIDTH, WINDOW_HEIGHT,
         SDL_WINDOW_RESIZABLE);
     if (!window) {
@@ -101,38 +101,40 @@ int main(int argc, char* argv[])
 
     ImageNode* front_center_R_node = CreateImageNode(scene,
                                         center_R_tex_info.texture, center_R_tex_info.width, center_R_tex_info.height,
-                                        static_cast<double>(center_R_tex_info.width)*1e-4, static_cast<double>(center_R_tex_info.height)*1e-4,
+                                        0.106, 0.106,
                                         0.0, 0.0, -0.1664,
                                         1.0f,
                                         keypoints, front_fan_center_node, 2);
 
-    SceneNode* front_fan_1_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_center_node);
+    SceneNode* front_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_center_node);
+
+    SceneNode* front_fan_1_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_rotation_center_node);
 
     ImageNode* front_fan_background_1_node = CreateImageNode(scene,
                                         fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
-                                        static_cast<double>(fan_background_tex_info.width)*1e-4, static_cast<double>(fan_background_tex_info.height)*1e-4,
-                                        0.0, -0.1543-static_cast<double>(fan_background_tex_info.height)*1e-4/2.0, 0.0,
+                                        0.4151, 0.7419,
+                                        0.0, -0.1543-0.7419/2.0, 0.0,
                                         1.0f,
                                         keypoints, front_fan_1_node, 0);
 
     ImageNode* front_fan_light_1_node = CreateImageNode(scene,
                                         fan_light_tex_info.texture, fan_light_tex_info.width, fan_light_tex_info.height,
-                                        static_cast<double>(fan_light_tex_info.width)*1e-4, static_cast<double>(fan_light_tex_info.height)*1e-4,
-                                        0.0, -0.1543-static_cast<double>(fan_light_tex_info.height)*1e-4/2.0, 0.0,
+                                        0.4151, 0.7419,
+                                        0.0, -0.1543-0.7419/2.0, 0.0,
                                         1.0f,
                                         keypoints, front_fan_1_node, 1);
 
     ImageNode* front_target_1_node = CreateImageNode(scene,
                                         target_tex_info.texture, target_tex_info.width, target_tex_info.height,
-                                        static_cast<double>(target_tex_info.width)*1e-4, static_cast<double>(target_tex_info.height)*1e-4,
+                                        0.3, 0.3,
                                         0.0, -0.6996, 0.0,
                                         1.0f,
                                         keypoints, front_fan_1_node, 1);
     
     ImageNode* front_flowing_arrow_1_node = CreateImageNode(scene,
                                         flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
-                                        static_cast<double>(flowing_arrow_tex_info.width)*1e-4, static_cast<double>(flowing_arrow_tex_info.height)*1e-4,
-                                        0.0, 0.0, 0.0,
+                                        0.06, 0.33,
+                                        0.0, -0.1543-0.02-0.33/2.0, 0.0,
                                         1.0f,
                                         keypoints, front_fan_1_node, 1);
 
@@ -147,6 +149,7 @@ int main(int argc, char* argv[])
     }
 
     bool show_keypoints = false;
+    int show_light_type = 0;
 
     // ---------- 5. 控制状态 ----------
     bool mouse_grabbed = false;
@@ -185,6 +188,7 @@ int main(int argc, char* argv[])
     SDL_Log("WASD: move | SPACE: up | SHIFT: down | ESC: release/quit");
     SDL_Log("Q/E: roll camera | R: reset roll");
     SDL_Log("M: toggle keypoints | P: screenshot");
+    SDL_Log("C: change light type");
 
     uint64_t prev_ticks = SDL_GetTicks();
 
@@ -237,6 +241,15 @@ int main(int argc, char* argv[])
                 case SDLK_P:
                     if (event.key.repeat == 0) {
                         screenshot_requested = true;
+                    }
+                    break;
+                case SDLK_C:
+                    if (event.key.repeat == 0) {
+                        if (show_light_type == 2) {
+                            show_light_type = 0;
+                        } else {
+                            show_light_type += 1;
+                        }
                     }
                     break;
                 default: break;
@@ -296,6 +309,31 @@ int main(int argc, char* argv[])
         if (key_q) camera.roll += roll_speed * dt;
         if (key_e) camera.roll -= roll_speed * dt;
 
+        // ---------- 图像更新 ----------
+        switch (show_light_type)
+        {
+        case 0:
+            front_fan_light_1_node -> SetAlpha(0.0);
+            front_flowing_arrow_1_node -> SetAlpha(0.0);
+            break;
+        case 1:
+            front_fan_light_1_node -> SetAlpha(0.0);
+            front_flowing_arrow_1_node -> SetAlpha(1.0);
+            break;
+        case 2:
+            front_fan_light_1_node -> SetAlpha(1.0);
+            front_flowing_arrow_1_node -> SetAlpha(0.0);
+            break;
+        
+        default:
+            break;
+        }
+        
+        front_flowing_arrow_1_node -> SetTextureOffset(
+            0.0,
+            front_flowing_arrow_1_node -> GetTextureOffsetY() + dt * 1.0
+        );
+
         // =============================================================
         // 渲染步骤：离屏渲染 → 覆盖层 → 截图 → 显示
         // =============================================================
@@ -322,15 +360,15 @@ int main(int argc, char* argv[])
 
             // 构建所有附加纹理（传入投影数据）
             std::vector<std::vector<ExtraTextureInfo>> all_textures;
-            BuildKeypointAllTextures(projections, renderer, index_textures,
-                                     all_textures,
-                                     cached_glo_texts, glo_textures,
-                                     cached_cam_texts, cam_textures,
-                                     cached_pix_texts, pix_textures);
+            // BuildKeypointAllTextures(projections, renderer, index_textures,
+            //                          all_textures,
+            //                          cached_glo_texts, glo_textures,
+            //                          cached_cam_texts, cam_textures,
+            //                          cached_pix_texts, pix_textures);
 
             front_target_1_node->RenderKeypoints(renderer, intrinsics, distortion,
                                                  cam_pos, camera.yaw, camera.pitch, camera.roll,
-                                                 all_textures);
+                                                 all_textures, {0.0, 1.0, 1.0, 1.0});
         }
 
         // ---- Step 5: 截图 ----
