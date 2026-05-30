@@ -314,21 +314,23 @@ int main(int argc, char* argv[])
 
         // ---- Step 4: 关键点渲染 ----
         if (show_keypoints && !keypoints.empty() && front_target_1_node) {
-            std::vector<std::vector<ExtraTextureInfo>> all_textures;
-            BuildKeypointAllTextures(
-                *front_target_1_node, renderer,
-                intrinsics, distortion,
-                cam_pos, camera.yaw, camera.pitch, camera.roll,
-                index_textures,
-                all_textures,
-                cached_glo_texts, glo_textures,
-                cached_cam_texts, cam_textures,
-                cached_pix_texts, pix_textures);
+            // 预计算关键点投影
+            std::vector<KeypointProjection> projections;
+            ComputeKeypointProjections(*front_target_1_node, intrinsics, distortion,
+                                       cam_pos, camera.yaw, camera.pitch, camera.roll,
+                                       projections);
 
-            front_target_1_node->RenderKeypoints(
-                renderer, intrinsics, distortion,
-                cam_pos, camera.yaw, camera.pitch, camera.roll,
-                all_textures);
+            // 构建所有附加纹理（传入投影数据）
+            std::vector<std::vector<ExtraTextureInfo>> all_textures;
+            BuildKeypointAllTextures(projections, renderer, index_textures,
+                                     all_textures,
+                                     cached_glo_texts, glo_textures,
+                                     cached_cam_texts, cam_textures,
+                                     cached_pix_texts, pix_textures);
+
+            front_target_1_node->RenderKeypoints(renderer, intrinsics, distortion,
+                                                 cam_pos, camera.yaw, camera.pitch, camera.roll,
+                                                 all_textures);
         }
 
         // ---- Step 5: 截图 ----

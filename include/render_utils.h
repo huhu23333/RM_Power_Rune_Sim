@@ -106,6 +106,32 @@ void PresentOffscreenToWindow(SDL_Renderer* renderer, SDL_Texture* offscreen,
 // 关键点附加纹理管理（外部缓存）
 // -----------------------------------------------------------------------------
 
+// 关键点投影结果（世界坐标、相机坐标、屏幕像素坐标及有效性）
+struct KeypointProjection {
+    Point3D world_pt;   // 世界坐标
+    Point3D cam_pt;     // 相机坐标系坐标
+    Point2D screen_pt;  // 投影后的屏幕坐标（像素）
+    bool   valid;       // 是否在相机前方且投影有效
+};
+
+/**
+ * @brief 计算一个 ImageNode 中所有关键点的投影数据
+ *
+ * @param node         目标 ImageNode
+ * @param intrinsics   相机内参
+ * @param distortion   畸变系数
+ * @param cam_pos      相机世界坐标
+ * @param cam_yaw, cam_pitch, cam_roll  相机姿态（Yaw/Pitch/Roll）
+ * @param out_projections  输出的投影结果，顺序与 node.GetKeypoints() 一致
+ */
+void ComputeKeypointProjections(
+    const ImageNode& node,
+    const CameraIntrinsics& intrinsics,
+    const DistortionCoefficients& distortion,
+    const Point3D& cam_pos,
+    double cam_yaw, double cam_pitch, double cam_roll,
+    std::vector<KeypointProjection>& out_projections);
+
 /**
  * @brief 构建关键点所有附加纹理（含序号 + 坐标标签），已合并可直接传入 RenderKeypoints
  *
@@ -113,12 +139,8 @@ void PresentOffscreenToWindow(SDL_Renderer* renderer, SDL_Texture* offscreen,
  * 与坐标信息文字标签（glo/cam/pix，动态，使用缓存避免重复创建）合并到一个列表中。
  * 输出可直接作为 RenderKeypoints 的 all_extra_textures 参数传入。
  *
- * @param node                    目标 ImageNode（包含关键点）
+ * @param projections             ComputeKeypointProjections返回的关键点投影信息
  * @param renderer                SDL 渲染器
- * @param intrinsics              相机内参
- * @param distortion              畸变系数
- * @param cam_pos                 相机位置
- * @param cam_yaw, cam_pitch, cam_roll  相机姿态
  * @param index_textures          每个关键点的序号纹理（静态，合并时放置到关键点右侧）
  * @param out_all_textures        输出：每个关键点的完整附加纹理列表（序号 + 坐标标签合并）
  * @param cached_glo_texts, cached_glo_textures  全局坐标缓存
@@ -126,12 +148,8 @@ void PresentOffscreenToWindow(SDL_Renderer* renderer, SDL_Texture* offscreen,
  * @param cached_pix_texts, cached_pix_textures  像素坐标缓存
  */
 void BuildKeypointAllTextures(
-    const ImageNode& node,
+    const std::vector<KeypointProjection>& projections,
     SDL_Renderer* renderer,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion,
-    const Point3D& cam_pos,
-    double cam_yaw, double cam_pitch, double cam_roll,
     const std::vector<SDL_Texture*>& index_textures,
     std::vector<std::vector<ExtraTextureInfo>>& out_all_textures,
     std::vector<std::string>& cached_glo_texts,

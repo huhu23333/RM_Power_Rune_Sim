@@ -164,16 +164,49 @@ void PresentOffscreenToWindow(SDL_Renderer* renderer, SDL_Texture* offscreen,
     SDL_RenderPresent(renderer);
 }
 
-// =============================================================================
-// 关键点所有附加纹理构建（含序号 + 坐标标签，已合并）
-// =============================================================================
-void BuildKeypointAllTextures(
+void ComputeKeypointProjections(
     const ImageNode& node,
-    SDL_Renderer* renderer,
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion,
     const Point3D& cam_pos,
     double cam_yaw, double cam_pitch, double cam_roll,
+    std::vector<KeypointProjection>& out_projections)
+{
+    const auto& keypoints = node.GetKeypoints();
+    out_projections.clear();
+    out_projections.reserve(keypoints.size());
+
+    const float MAX_COORD = 1e6f;
+
+    for (size_t ki = 0; ki < keypoints.size(); ++ki) {
+        KeypointProjection proj;
+        proj.world_pt = node.GetKeypointWorldPos(ki);
+        proj.cam_pt = WorldToCameraTransform(proj.world_pt, cam_pos,
+                                             cam_yaw, cam_pitch, cam_roll);
+        if (proj.cam_pt.z <= 0.001) {
+            proj.valid = false;
+            out_projections.push_back(proj);
+            continue;
+        }
+
+        proj.screen_pt = ProjectPoint(proj.cam_pt, intrinsics, distortion);
+        if (std::isnan(proj.screen_pt.x) || std::isnan(proj.screen_pt.y) ||
+            std::abs(proj.screen_pt.x) > MAX_COORD ||
+            std::abs(proj.screen_pt.y) > MAX_COORD) {
+            proj.valid = false;
+        } else {
+            proj.valid = true;
+        }
+        out_projections.push_back(proj);
+    }
+}
+
+// =============================================================================
+// 关键点所有附加纹理构建（含序号 + 坐标标签，已合并）
+// =============================================================================
+void BuildKeypointAllTextures(
+    const std::vector<KeypointProjection>& projections,
+    SDL_Renderer* renderer,
     const std::vector<SDL_Texture*>& index_textures,
     std::vector<std::vector<ExtraTextureInfo>>& out_all_textures,
     std::vector<std::string>& cached_glo_texts,
@@ -183,28 +216,17 @@ void BuildKeypointAllTextures(
     std::vector<std::string>& cached_pix_texts,
     std::vector<SDL_Texture*>& cached_pix_textures)
 {
-    const auto& keypoints = node.GetKeypoints();
-    const float MAX_COORD = 1e6f;
+    out_all_textures.resize(projections.size());
 
-    out_all_textures.resize(keypoints.size());
-
-    for (size_t ki = 0; ki < keypoints.size(); ++ki) {
+    for (size_t ki = 0; ki < projections.size(); ++ki) {
         out_all_textures[ki].clear();
+        const auto& proj = projections[ki];
+        if (!proj.valid) continue;
 
-        Point3D world_pt = node.GetKeypointWorldPos(ki);
-        Point3D cam_pt = WorldToCameraTransform(world_pt, cam_pos,
-                                                  cam_yaw, cam_pitch, cam_roll);
-        if (cam_pt.z <= 0.001) continue;
+        float sx = (float)proj.screen_pt.x;
+        float sy = (float)proj.screen_pt.y;
 
-        Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
-        if (std::isnan(screen_pt.x) || std::isnan(screen_pt.y) ||
-            std::abs(screen_pt.x) > MAX_COORD || std::abs(screen_pt.y) > MAX_COORD)
-            continue;
-
-        float sx = (float)screen_pt.x;
-        float sy = (float)screen_pt.y;
-
-        // --- 1. 序号纹理（静态，来自外部） ---
+        // --- 1. 序号纹理（静态） ---
         if (ki < index_textures.size() && index_textures[ki]) {
             float tw, th;
             SDL_GetTextureSize(index_textures[ki], &tw, &th);
@@ -215,11 +237,11 @@ void BuildKeypointAllTextures(
         // --- 2. 坐标信息文字标签 ---
         char glo_str[64], cam_str[64], pix_str[64];
         std::snprintf(glo_str, sizeof(glo_str), "glo:(%.2f, %.2f, %.2f)",
-                     world_pt.x, world_pt.y, world_pt.z);
+                      proj.world_pt.x, proj.world_pt.y, proj.world_pt.z);
         std::snprintf(cam_str, sizeof(cam_str), "cam:(%.2f, %.2f, %.2f)",
-                     cam_pt.x, cam_pt.y, cam_pt.z);
+                      proj.cam_pt.x, proj.cam_pt.y, proj.cam_pt.z);
         std::snprintf(pix_str, sizeof(pix_str), "pix:(%.1f, %.1f)",
-                     screen_pt.x, screen_pt.y);
+                      proj.screen_pt.x, proj.screen_pt.y);
 
         auto update_texture = [&](const char* new_text,
                                   std::string& cached_text,
