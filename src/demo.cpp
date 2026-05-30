@@ -121,9 +121,11 @@ int main(int argc, char* argv[])
     ImageNode* front_node = CreateImageNode(scene,
                     tex_info.texture, tex_info.width, tex_info.height,
                     base_width, base_height,
-                    0.0, 0.0, rect_depth,
+                    -3.0, 0.0, rect_depth,
                     1.0f,
                     {}, nullptr);
+    
+    front_node -> SetLocalRotation(-M_PI/4, 0.0, 0.0);
 
     // ===== 4b. 后方纹理图像（半透明，可本体旋转） =====
     double back_z = rect_depth + 3.0;
@@ -149,7 +151,7 @@ int main(int argc, char* argv[])
     ImageNode* flowing_arrow_node = CreateImageNode(scene,
                                                     flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
                                                     60.0*0.01, 330.0*0.01,
-                                                    5, 0.0, rect_depth,
+                                                    2, 0.0, rect_depth,
                                                     1.0f,
                                                     {}, nullptr);
 
