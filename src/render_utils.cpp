@@ -13,8 +13,6 @@ SDL_Texture* RenderTextToTexture(SDL_Renderer* renderer, const char* text,
                                   double font_scale,
                                   int thickness)
 {
-    (void)color;  // 颜色在 opencv 渲染时用纯白，通过 SDL 纹理 blend 模式调色
-
     int baseline = 0;
     cv::Size text_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX,
                                           font_scale, thickness, &baseline);
@@ -28,7 +26,11 @@ SDL_Texture* RenderTextToTexture(SDL_Renderer* renderer, const char* text,
 
     cv::putText(img, text, cv::Point(pad, h - pad - baseline),
                 cv::FONT_HERSHEY_SIMPLEX, font_scale,
-                cv::Scalar(255, 255, 255, 255), thickness, cv::LINE_AA);
+                cv::Scalar(static_cast<uint8_t>(color.b*255.0f), 
+                           static_cast<uint8_t>(color.g*255.0f), 
+                           static_cast<uint8_t>(color.r*255.0f), 
+                           static_cast<uint8_t>(color.a*255.0f)), 
+                thickness, cv::LINE_AA);
 
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
                                              SDL_TEXTUREACCESS_STATIC, w, h);
