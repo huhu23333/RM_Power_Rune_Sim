@@ -79,6 +79,18 @@ int main(int argc, char* argv[])
     }
     SDL_Log("Target texture size: %dx%d", target_tex_info.width, target_tex_info.height);
 
+    TextureInfo flowing_arrow_tex_info = LoadTextureFromPNG(renderer, "images/results/flowing_arrow.png");
+    if (!flowing_arrow_tex_info.texture) {
+        SDL_Log("Failed to load flowing_arrow texture.");
+        SDL_DestroyTexture(tex_info.texture);
+        SDL_DestroyTexture(target_tex_info.texture);
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return -1;
+    }
+    SDL_Log("flowing_arrow texture size: %dx%d", flowing_arrow_tex_info.width, flowing_arrow_tex_info.height);
+
     // ---------- 2c. 读取关键点文件 ----------
     std::vector<Keypoint> keypoints = LoadKeypointsFromFile("images/results/target.txt");
 
@@ -106,7 +118,7 @@ int main(int argc, char* argv[])
     double rect_depth = 2.0;
 
     // ===== 4a. 前方纹理图像 =====
-    CreateImageNode(scene,
+    ImageNode* front_node = CreateImageNode(scene,
                     tex_info.texture, tex_info.width, tex_info.height,
                     base_width, base_height,
                     0.0, 0.0, rect_depth,
@@ -133,6 +145,13 @@ int main(int argc, char* argv[])
                                              0.0, 0.0, target_local_z,
                                              1.0f,
                                              keypoints, back_node);
+
+    ImageNode* flowing_arrow_node = CreateImageNode(scene,
+                                                    flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
+                                                    60.0*0.01, 330.0*0.01,
+                                                    5, 0.0, rect_depth,
+                                                    1.0f,
+                                                    {}, nullptr);
 
     // 预渲染关键点序号纹理
     std::vector<SDL_Texture*> index_textures(keypoints.size(), nullptr);
@@ -349,6 +368,12 @@ int main(int argc, char* argv[])
             back_node->SetLocalRotation(back_yaw, back_pitch, back_roll);
             back_node->SetLocalPosition(back_yaw, back_pitch, back_roll + back_z);
         }
+
+        // ---------- 图像更新 ----------
+        flowing_arrow_node -> SetTextureOffset(
+            0.0,
+            flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
+        );
 
         // =============================================================
         // 渲染步骤：离屏渲染 → 覆盖层 → 截图 → 显示

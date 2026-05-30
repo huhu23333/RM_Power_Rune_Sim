@@ -143,6 +143,12 @@ public:
     void SetAlpha(float alpha);
     float GetAlpha() const;
 
+    /// 设置纹理偏移量（占纹理边长的比例）。图像会按给定比例循环折叠偏移。
+    /// offset_x, offset_y 取值范围不限，内部自动归一化到 [0, 1)。
+    void SetTextureOffset(float offset_x, float offset_y);
+    float GetTextureOffsetX() const;
+    float GetTextureOffsetY() const;
+
     const std::vector<RenderFace>& GetFaces() const;
     std::vector<RenderFace>& GetFaces();
 
@@ -182,6 +188,8 @@ private:
     double m_display_width = 2.0;
     double m_display_height = 2.0;
     float m_alpha = 1.0f;
+    float m_offset_x = 0.0f;   // U方向偏移比例
+    float m_offset_y = 0.0f;   // V方向偏移比例
     std::vector<RenderFace> m_faces;
     std::vector<Keypoint> m_keypoints;
 };

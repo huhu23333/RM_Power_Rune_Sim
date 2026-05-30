@@ -277,6 +277,9 @@ void ImageNode::SetTexture(SDL_Texture* tex, int w, int h)
     m_texture = tex;
     m_tex_width = w;
     m_tex_height = h;
+    if (m_texture) {
+        SDL_SetTextureScaleMode(m_texture, SDL_SCALEMODE_LINEAR);
+    }
     UpdateFaces();
 }
 
@@ -308,6 +311,19 @@ void ImageNode::SetDisplaySize(double width, double height)
 
 void ImageNode::SetAlpha(float alpha) { m_alpha = alpha; }
 float ImageNode::GetAlpha() const { return m_alpha; }
+
+void ImageNode::SetTextureOffset(float offset_x, float offset_y)
+{
+    // 归一化到 [0, 1) 范围
+    offset_x = offset_x - std::floor(offset_x);
+    offset_y = offset_y - std::floor(offset_y);
+    m_offset_x = offset_x;
+    m_offset_y = offset_y;
+    UpdateFaces();
+}
+
+float ImageNode::GetTextureOffsetX() const { return m_offset_x; }
+float ImageNode::GetTextureOffsetY() const { return m_offset_y; }
 
 const std::vector<RenderFace>& ImageNode::GetFaces() const { return m_faces; }
 std::vector<RenderFace>& ImageNode::GetFaces() { return m_faces; }
@@ -399,10 +415,14 @@ void ImageNode::UpdateFaces()
 
     {
         RenderFace face;
+        // 使用偏移后的 UV 左/上/右/下边界
+        // 偏移量 m_offset_x/m_offset_y 是归一化比例，控制纹理采样起始位置
+        // 超出的部分会因 wrap 寻址模式循环折叠回另一侧
         BuildFaceTriangles(face.world_verts,
                            0, 0, 0,
                            m_display_width, m_display_height,
-                           0.0f, 0.0f, 1.0f, 1.0f);
+                           m_offset_x, m_offset_y,               // UV 左下
+                           m_offset_x + 1.0f, m_offset_y + 1.0f); // UV 右上
         face.texture = m_texture;
         face.color = { 1.0f, 1.0f, 1.0f, m_alpha };
         m_faces.push_back(std::move(face));
@@ -427,6 +447,11 @@ void ImageNode::Render(SDL_Renderer* renderer,
     };
     std::vector<SortedFace> sorted_faces;
     const float MAX_COORD = 1e6f;
+
+    // 为支持纹理循环折叠偏移，设置纹理寻址方式为 WRAP
+    SDL_TextureAddressMode prev_u, prev_v;
+    SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
+    SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
 
     for (const auto& face : m_faces) {
         SortedFace sf;
@@ -488,6 +513,9 @@ void ImageNode::Render(SDL_Renderer* renderer,
                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
                            nullptr, 0);
     }
+
+    // 恢复原先的寻址模式
+    SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
 
 // =============================================================================
@@ -529,6 +557,11 @@ void Scene::RenderAll(SDL_Renderer* renderer,
     };
     std::vector<SortedFace> sorted_faces;
     const float MAX_COORD = 1e6f;
+
+    // 为支持纹理循环折叠偏移，设置纹理寻址方式为 WRAP
+    SDL_TextureAddressMode prev_u, prev_v;
+    SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
+    SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
 
     for (const auto& node : m_nodes) {
         const ImageNode* img_node = dynamic_cast<const ImageNode*>(node.get());
@@ -596,6 +629,9 @@ void Scene::RenderAll(SDL_Renderer* renderer,
                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
                            nullptr, 0);
     }
+
+    // 恢复原先的寻址模式
+    SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
 
 const std::vector<SceneNodePtr>& Scene::GetAllNodes() const { return m_nodes; }
