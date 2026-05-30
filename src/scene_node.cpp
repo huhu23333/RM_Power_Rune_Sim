@@ -159,8 +159,8 @@ void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
                         float uv_l, float uv_t,
                         float uv_r, float uv_b)
 {
-    int segs_w = std::max(1, (int)std::ceil(width / SUBDIV_SCALE));
-    int segs_h = std::max(1, (int)std::ceil(height / SUBDIV_SCALE));
+    int segs_w = std::max(1, std::min((int)std::ceil(width / SUBDIV_SCALE), SUBDIV_MAXNUM));
+    int segs_h = std::max(1, std::min((int)std::ceil(height / SUBDIV_SCALE), SUBDIV_MAXNUM));
     double hw = width / 2.0, hh = height / 2.0;
 
     out_verts.clear();

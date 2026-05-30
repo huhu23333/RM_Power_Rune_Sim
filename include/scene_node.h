@@ -91,6 +91,7 @@ struct RenderFace {
 };
 
 const double SUBDIV_SCALE = 0.05;
+const int SUBDIV_MAXNUM = 64;
 
 // 工具函数
 void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,

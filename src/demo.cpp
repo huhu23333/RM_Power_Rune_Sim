@@ -92,14 +92,11 @@ int main(int argc, char* argv[])
     Scene scene;
 
     // ===== target 图像（直接固定在 scene 中，不设置父节点） =====
-    double target_base_height = 5.0;
-    double target_base_width = target_base_height * (double)target_tex_info.width / (double)target_tex_info.height;
-    double target_pos_z = 5.0;  // 放置在相机前方
 
     ImageNode* target_node = CreateImageNode(scene,
                                              target_tex_info.texture, target_tex_info.width, target_tex_info.height,
-                                             target_base_width, target_base_height,
-                                             0.0, 0.0, target_pos_z,
+                                             0.3, 0.3,
+                                             0.0, 0.0, 5.0,
                                              1.0f,
                                              keypoints, nullptr);
 
