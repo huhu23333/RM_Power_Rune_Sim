@@ -56,6 +56,7 @@ SceneNode* CreateSceneNode(
  * @param alpha          透明度 [0, 1]
  * @param keypoints      关键点列表（可空）
  * @param parent         父节点指针（nullptr 表示无父节点）
+ * @param render_priority   渲染优先级，按照优先级从低到高顺序渲染
  * @return ImageNode*    创建的节点指针
  */
 ImageNode* CreateImageNode(

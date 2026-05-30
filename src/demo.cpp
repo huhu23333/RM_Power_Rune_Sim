@@ -67,6 +67,12 @@ int main(int argc, char* argv[])
     TextureInfo flowing_arrow_tex_info = LoadTextureFromPNG(renderer, "images/results/flowing_arrow.png");
     SDL_Log("flowing_arrow texture size: %dx%d", flowing_arrow_tex_info.width, flowing_arrow_tex_info.height);
 
+    TextureInfo fan_background_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_background.png");
+    SDL_Log("fan_background texture size: %dx%d", fan_background_tex_info.width, fan_background_tex_info.height);
+
+    TextureInfo fan_light_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_light.png");
+    SDL_Log("fan_light texture size: %dx%d", fan_light_tex_info.width, fan_light_tex_info.height);
+
     // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> keypoints = LoadKeypointsFromFile("images/results/target.txt");
 
@@ -96,25 +102,39 @@ int main(int argc, char* argv[])
     ImageNode* front_center_R_node = CreateImageNode(scene,
                                         center_R_tex_info.texture, center_R_tex_info.width, center_R_tex_info.height,
                                         static_cast<double>(center_R_tex_info.width)*1e-4, static_cast<double>(center_R_tex_info.height)*1e-4,
-                                        0.0, 0.0, -0.01,
+                                        0.0, 0.0, -0.1664,
                                         1.0f,
-                                        keypoints, front_fan_center_node, 1);
+                                        keypoints, front_fan_center_node, 2);
 
     SceneNode* front_fan_1_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_center_node);
+
+    ImageNode* front_fan_background_1_node = CreateImageNode(scene,
+                                        fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
+                                        static_cast<double>(fan_background_tex_info.width)*1e-4, static_cast<double>(fan_background_tex_info.height)*1e-4,
+                                        0.0, -0.1543-static_cast<double>(fan_background_tex_info.height)*1e-4/2.0, 0.0,
+                                        1.0f,
+                                        keypoints, front_fan_1_node, 0);
+
+    ImageNode* front_fan_light_1_node = CreateImageNode(scene,
+                                        fan_light_tex_info.texture, fan_light_tex_info.width, fan_light_tex_info.height,
+                                        static_cast<double>(fan_light_tex_info.width)*1e-4, static_cast<double>(fan_light_tex_info.height)*1e-4,
+                                        0.0, -0.1543-static_cast<double>(fan_light_tex_info.height)*1e-4/2.0, 0.0,
+                                        1.0f,
+                                        keypoints, front_fan_1_node, 1);
 
     ImageNode* front_target_1_node = CreateImageNode(scene,
                                         target_tex_info.texture, target_tex_info.width, target_tex_info.height,
                                         static_cast<double>(target_tex_info.width)*1e-4, static_cast<double>(target_tex_info.height)*1e-4,
-                                        0.0, 0.0, 0.0,
+                                        0.0, -0.6996, 0.0,
                                         1.0f,
-                                        keypoints, front_fan_1_node);
+                                        keypoints, front_fan_1_node, 1);
     
     ImageNode* front_flowing_arrow_1_node = CreateImageNode(scene,
                                         flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
                                         static_cast<double>(flowing_arrow_tex_info.width)*1e-4, static_cast<double>(flowing_arrow_tex_info.height)*1e-4,
                                         0.0, 0.0, 0.0,
                                         1.0f,
-                                        keypoints, front_fan_1_node);
+                                        keypoints, front_fan_1_node, 1);
 
     // 预渲染关键点序号纹理
     std::vector<SDL_Texture*> index_textures(keypoints.size(), nullptr);
