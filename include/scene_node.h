@@ -41,7 +41,7 @@ using SceneNodePtr = std::shared_ptr<SceneNode>;
 class SceneNode
 {
 public:
-    SceneNode(const std::string& name = "Node");
+    SceneNode();
     virtual ~SceneNode();
 
     void SetParent(SceneNode* parent);
@@ -90,7 +90,7 @@ struct RenderFace {
     SDL_FColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
 
-const double SUBDIV_SCALE = 0.05;
+const double SUBDIV_SCALE = 0.005;
 const int SUBDIV_MAXNUM = 64;
 
 // 工具函数
@@ -130,7 +130,7 @@ Point3D KeypointPixelToWorld(const Keypoint& kp, const TargetFaceInfo& face,
 class ImageNode : public SceneNode
 {
 public:
-    ImageNode(const std::string& name = "Image");
+    ImageNode();
     ~ImageNode() override;
 
     void SetTexture(SDL_Texture* tex, int w, int h);
@@ -177,6 +177,9 @@ public:
                 double body_rot_yaw = 0.0,
                 double body_rot_pitch = 0.0,
                 double body_rot_roll = 0.0) override;
+    
+    void SetRenderPriority(int new_render_priority);
+    int getRenderPriority() const;
 
 protected:
     void UpdateFaces();
@@ -193,6 +196,7 @@ private:
     float m_offset_y = 0.0f;   // V方向偏移比例
     std::vector<RenderFace> m_faces;
     std::vector<Keypoint> m_keypoints;
+    int render_priority = 0;
 };
 
 // -----------------------------------------------------------------------------

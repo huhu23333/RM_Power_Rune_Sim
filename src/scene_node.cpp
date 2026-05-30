@@ -68,7 +68,7 @@ Point3D Transform3D::FromParent(const Point3D& parent) const
 // SceneNode
 // =============================================================================
 
-SceneNode::SceneNode(const std::string& /*name*/)
+SceneNode::SceneNode()
 {
 }
 
@@ -262,8 +262,8 @@ void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, 
 // ImageNode
 // =============================================================================
 
-ImageNode::ImageNode(const std::string& name)
-    : SceneNode(name) {}
+ImageNode::ImageNode()
+    : SceneNode() {}
 
 ImageNode::~ImageNode()
 {
@@ -518,6 +518,14 @@ void ImageNode::Render(SDL_Renderer* renderer,
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
 
+void ImageNode::SetRenderPriority(int new_render_priority) {
+    render_priority = new_render_priority;
+}
+
+int ImageNode::getRenderPriority() const {
+    return render_priority;
+}
+
 // =============================================================================
 // Scene
 // =============================================================================
@@ -553,7 +561,8 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         const RenderFace* face;
         const ImageNode* node;
         std::vector<SDL_Vertex> sdl_verts;
-        double cam_z;
+        double cam_distance;
+        int render_priority;
     };
     std::vector<SortedFace> sorted_faces;
     const float MAX_COORD = 1e6f;
@@ -572,8 +581,9 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             sf.face = &face;
             sf.node = img_node;
             sf.sdl_verts.reserve(face.world_verts.size());
-            double z_sum = 0.0;
+            double distance_sum = 0.0;
             int visible_tris = 0;
+            sf.render_priority = img_node->getRenderPriority();
 
             for (size_t i = 0; i < face.world_verts.size(); i += 3) {
                 const WorldVertex& wv0 = face.world_verts[i];
@@ -610,19 +620,29 @@ void Scene::RenderAll(SDL_Renderer* renderer,
                 sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
                 sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
                 sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
-                z_sum += c0.z + c1.z + c2.z;
-                visible_tris += 3;
+                
+                Point3D c_center = {
+                    (c0.x + c1.x + c2.x) / 3.0,
+                    (c0.y + c1.y + c2.y) / 3.0,
+                    (c0.z + c1.z + c2.z) / 3.0
+                };
+                distance_sum += std::sqrt(c_center.x * c_center.x + c_center.y * c_center.y + c_center.z * c_center.z);
+                visible_tris += 1;
             }
 
             if (visible_tris > 0) {
-                sf.cam_z = z_sum / visible_tris;
+                sf.cam_distance = distance_sum / visible_tris;
                 sorted_faces.push_back(std::move(sf));
             }
         }
     }
 
     std::sort(sorted_faces.begin(), sorted_faces.end(),
-        [](const SortedFace& a, const SortedFace& b) { return a.cam_z > b.cam_z; });
+        [](const SortedFace& a, const SortedFace& b) { 
+            if (a.render_priority < b.render_priority) return true;
+            if (a.render_priority > b.render_priority) return false;
+            return a.cam_distance > b.cam_distance; 
+        });
 
     for (const auto& sf : sorted_faces) {
         SDL_RenderGeometry(renderer, sf.face->texture,

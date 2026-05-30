@@ -57,16 +57,15 @@ int main(int argc, char* argv[])
     }
     SDL_SetTextureBlendMode(offscreen, SDL_BLENDMODE_BLEND_PREMULTIPLIED);
 
-    // ---------- 2. 加载 target 纹理 ----------
+    // ---------- 2. 加载纹理 ----------
+    TextureInfo center_R_tex_info = LoadTextureFromPNG(renderer, "images/results/center_R.png");
+    SDL_Log("center_R texture size: %dx%d", center_R_tex_info.width, center_R_tex_info.height);
+
     TextureInfo target_tex_info = LoadTextureFromPNG(renderer, "images/results/target.png");
-    if (!target_tex_info.texture) {
-        SDL_Log("Failed to load target texture.");
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return -1;
-    }
-    SDL_Log("Target texture size: %dx%d", target_tex_info.width, target_tex_info.height);
+    SDL_Log("target texture size: %dx%d", target_tex_info.width, target_tex_info.height);
+
+    TextureInfo flowing_arrow_tex_info = LoadTextureFromPNG(renderer, "images/results/flowing_arrow.png");
+    SDL_Log("flowing_arrow texture size: %dx%d", flowing_arrow_tex_info.width, flowing_arrow_tex_info.height);
 
     // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> keypoints = LoadKeypointsFromFile("images/results/target.txt");
@@ -89,16 +88,33 @@ int main(int argc, char* argv[])
             diagonal_fov * 180.0 / M_PI);
 
     // ---------- 4. 构建场景节点系统 ----------
+    // 单位：m
     Scene scene;
 
-    // ===== target 图像（直接固定在 scene 中，不设置父节点） =====
+    SceneNode* front_fan_center_node = CreateSceneNode(scene, 0.0, 0.0, 3.0, nullptr);
 
-    ImageNode* target_node = CreateImageNode(scene,
-                                             target_tex_info.texture, target_tex_info.width, target_tex_info.height,
-                                             0.3, 0.3,
-                                             0.0, 0.0, 5.0,
-                                             1.0f,
-                                             keypoints, nullptr);
+    ImageNode* front_center_R_node = CreateImageNode(scene,
+                                        center_R_tex_info.texture, center_R_tex_info.width, center_R_tex_info.height,
+                                        static_cast<double>(center_R_tex_info.width)*1e-4, static_cast<double>(center_R_tex_info.height)*1e-4,
+                                        0.0, 0.0, -0.01,
+                                        1.0f,
+                                        keypoints, front_fan_center_node, 1);
+
+    SceneNode* front_fan_1_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_center_node);
+
+    ImageNode* front_target_1_node = CreateImageNode(scene,
+                                        target_tex_info.texture, target_tex_info.width, target_tex_info.height,
+                                        static_cast<double>(target_tex_info.width)*1e-4, static_cast<double>(target_tex_info.height)*1e-4,
+                                        0.0, 0.0, 0.0,
+                                        1.0f,
+                                        keypoints, front_fan_1_node);
+    
+    ImageNode* front_flowing_arrow_1_node = CreateImageNode(scene,
+                                        flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
+                                        static_cast<double>(flowing_arrow_tex_info.width)*1e-4, static_cast<double>(flowing_arrow_tex_info.height)*1e-4,
+                                        0.0, 0.0, 0.0,
+                                        1.0f,
+                                        keypoints, front_fan_1_node);
 
     // 预渲染关键点序号纹理
     std::vector<SDL_Texture*> index_textures(keypoints.size(), nullptr);
@@ -277,10 +293,10 @@ int main(int argc, char* argv[])
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
 
         // ---- Step 4: 关键点渲染 ----
-        if (show_keypoints && !keypoints.empty() && target_node) {
+        if (show_keypoints && !keypoints.empty() && front_target_1_node) {
             std::vector<std::vector<ExtraTextureInfo>> all_textures;
             BuildKeypointAllTextures(
-                *target_node, renderer,
+                *front_target_1_node, renderer,
                 intrinsics, distortion,
                 cam_pos, camera.yaw, camera.pitch, camera.roll,
                 index_textures,
@@ -289,7 +305,7 @@ int main(int argc, char* argv[])
                 cached_cam_texts, cam_textures,
                 cached_pix_texts, pix_textures);
 
-            target_node->RenderKeypoints(
+            front_target_1_node->RenderKeypoints(
                 renderer, intrinsics, distortion,
                 cam_pos, camera.yaw, camera.pitch, camera.roll,
                 all_textures);

@@ -33,6 +33,19 @@ SDL_Texture* RenderTextToTexture(SDL_Renderer* renderer, const char* text,
 // -----------------------------------------------------------------------------
 
 /**
+ * @brief 创建并初始化一个纯 SceneNode（变换/分组节点），不包含纹理渲染
+ *
+ * @param scene          场景对象
+ * @param pos_x, pos_y, pos_z  局部坐标位置
+ * @param parent         父节点指针（nullptr 表示无父节点）
+ * @return SceneNode*    创建的节点指针
+ */
+SceneNode* CreateSceneNode(
+    Scene& scene,
+    double pos_x, double pos_y, double pos_z,
+    SceneNode* parent = nullptr);
+
+/**
  * @brief 创建并初始化一个 ImageNode，添加到场景中
  *
  * @param scene          场景对象
@@ -52,7 +65,7 @@ ImageNode* CreateImageNode(
     double pos_x, double pos_y, double pos_z,
     float alpha = 1.0f,
     const std::vector<Keypoint>& keypoints = {},
-    SceneNode* parent = nullptr);
+    SceneNode* parent = nullptr, int render_priority = 0);
 
 // -----------------------------------------------------------------------------
 // 渲染步骤辅助函数

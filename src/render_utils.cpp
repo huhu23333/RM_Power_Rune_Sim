@@ -47,6 +47,23 @@ SDL_Texture* RenderTextToTexture(SDL_Renderer* renderer, const char* text,
 // =============================================================================
 // 场景节点快速创建
 // =============================================================================
+SceneNode* CreateSceneNode(
+    Scene& scene,
+    double pos_x, double pos_y, double pos_z,
+    SceneNode* parent)
+{
+    auto node = std::make_shared<SceneNode>();
+    node->SetLocalPosition(pos_x, pos_y, pos_z);
+
+    SceneNode* added_ptr = scene.AddNode(std::move(node));
+
+    if (parent) {
+        added_ptr->SetParent(parent);
+    }
+
+    return added_ptr;
+}
+
 ImageNode* CreateImageNode(
     Scene& scene,
     SDL_Texture* texture, int tex_w, int tex_h,
@@ -54,7 +71,7 @@ ImageNode* CreateImageNode(
     double pos_x, double pos_y, double pos_z,
     float alpha,
     const std::vector<Keypoint>& keypoints,
-    SceneNode* parent)
+    SceneNode* parent, int render_priority)
 {
     auto img_node = std::make_shared<ImageNode>();
 
@@ -62,6 +79,7 @@ ImageNode* CreateImageNode(
     img_node->SetDisplaySize(display_w, display_h);
     img_node->SetLocalPosition(pos_x, pos_y, pos_z);
     img_node->SetAlpha(alpha);
+    img_node->SetRenderPriority(render_priority);
 
     if (!keypoints.empty()) {
         img_node->SetKeypoints(keypoints);
