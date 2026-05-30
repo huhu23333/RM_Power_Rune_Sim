@@ -154,10 +154,6 @@ int main(int argc, char* argv[])
                                             {}, fan_node_group.fan_node, 1);
     }
 
-
-    bool show_keypoints = false;
-    int show_light_type = 0;
-
     // ---------- 5. 控制状态 ----------
     bool mouse_grabbed = false;
     struct CameraPose {
@@ -174,8 +170,14 @@ int main(int argc, char* argv[])
     bool key_up = false, key_down = false;
     bool key_q = false, key_e = false;
 
-    float roll_speed = 1.5f;
+    float cam_roll_speed = 1.5f;
     bool screenshot_requested = false;
+
+    bool show_keypoints = false;
+    int show_light_type = 0;
+
+    double rune_roll_speed = 1.5;
+    double rune_roll_rad = 0.0;
 
     // ---------- 6. 主循环 ----------
     SDL_Event event{};
@@ -292,21 +294,9 @@ int main(int argc, char* argv[])
             }
         }
 
-        // ---------- 摄像机移动 ----------
-        double wf_x = std::sin(camera.yaw);
-        double wf_z = std::cos(camera.yaw);
-        double wr_x = std::cos(camera.yaw);
-        double wr_z = -std::sin(camera.yaw);
-
-        if (key_w) { cam_pos.x += wf_x * move_speed * dt; cam_pos.z += wf_z * move_speed * dt; }
-        if (key_s) { cam_pos.x -= wf_x * move_speed * dt; cam_pos.z -= wf_z * move_speed * dt; }
-        if (key_a) { cam_pos.x -= wr_x * move_speed * dt; cam_pos.z -= wr_z * move_speed * dt; }
-        if (key_d) { cam_pos.x += wr_x * move_speed * dt; cam_pos.z += wr_z * move_speed * dt; }
-        if (key_up)   cam_pos.y -= move_speed * dt;
-        if (key_down) cam_pos.y += move_speed * dt;
-
-        if (key_q) camera.roll += roll_speed * dt;
-        if (key_e) camera.roll -= roll_speed * dt;
+        // ---------- 节点位置变换 ----------
+        rune_roll_rad += rune_roll_speed * dt;
+        front_fan_rotation_center_node -> SetLocalRotation(0.0, 0.0, rune_roll_rad);
 
         // ---------- 图像更新 ----------
         switch (show_light_type)
@@ -338,7 +328,24 @@ int main(int argc, char* argv[])
             fan_node_group.flowing_arrow_node -> SetTextureOffset(
                 0.0,
                 fan_node_group.flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
-        );
+            );
+        }
+
+        // ---------- 摄像机移动 ----------
+        double wf_x = std::sin(camera.yaw);
+        double wf_z = std::cos(camera.yaw);
+        double wr_x = std::cos(camera.yaw);
+        double wr_z = -std::sin(camera.yaw);
+
+        if (key_w) { cam_pos.x += wf_x * move_speed * dt; cam_pos.z += wf_z * move_speed * dt; }
+        if (key_s) { cam_pos.x -= wf_x * move_speed * dt; cam_pos.z -= wf_z * move_speed * dt; }
+        if (key_a) { cam_pos.x -= wr_x * move_speed * dt; cam_pos.z -= wr_z * move_speed * dt; }
+        if (key_d) { cam_pos.x += wr_x * move_speed * dt; cam_pos.z += wr_z * move_speed * dt; }
+        if (key_up)   cam_pos.y -= move_speed * dt;
+        if (key_down) cam_pos.y += move_speed * dt;
+
+        if (key_q) camera.roll += cam_roll_speed * dt;
+        if (key_e) camera.roll -= cam_roll_speed * dt;
 
         // 更新所有场景节点的世界变换矩阵
         scene.UpdateAllTransforms();
@@ -360,7 +367,7 @@ int main(int argc, char* argv[])
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
 
         // ---- Step 4: 关键点渲染 ----
-        if (show_keypoints)
+        if (show_keypoints) {
             for (auto& fan_node_group : fan_node_groups) {
                 auto* target_node = fan_node_group.target_node;
 

@@ -114,8 +114,8 @@ struct RenderFace {
     SDL_FColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
 
-const double SUBDIV_SCALE = 0.05;
-const int SUBDIV_MAXNUM = 16;
+const double SUBDIV_SCALE = 0.005;
+const int SUBDIV_MAXNUM = 64;
 
 // 工具函数
 void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
