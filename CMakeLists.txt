@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(demo)
+project(RM_ruin)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Release)
@@ -17,9 +17,8 @@ add_subdirectory(third_party/SDL3)
 
 find_package(OpenCV REQUIRED)
 
-# Main executable — all source files compiled in directly
-add_executable(demo
-    src/demo.cpp
+# Core library — all non-demo source files compiled into a shared library
+add_library(render_core SHARED
     src/camera_projection.cpp
     src/stb_image_impl.cpp
     src/scene_node.cpp
@@ -27,7 +26,29 @@ add_executable(demo
     src/render_utils.cpp
 )
 
+target_link_libraries(render_core
+    SDL3::SDL3
+    ${OpenCV_LIBS}
+)
+
+# Test executable
+add_executable(test
+    src/test.cpp
+)
+
+target_link_libraries(test
+    render_core
+    SDL3::SDL3
+    ${OpenCV_LIBS}
+)
+
+# Demo executable
+add_executable(demo
+    src/demo.cpp
+)
+
 target_link_libraries(demo
+    render_core
     SDL3::SDL3
     ${OpenCV_LIBS}
 )

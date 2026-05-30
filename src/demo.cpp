@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
     const int WINDOW_HEIGHT = 1080;
 
     SDL_Window* window = SDL_CreateWindow(
-        "Demo - Scene Node System",
+        "Demo - RM Ruin",
         WINDOW_WIDTH, WINDOW_HEIGHT,
         SDL_WINDOW_RESIZABLE);
     if (!window) {
@@ -57,21 +57,10 @@ int main(int argc, char* argv[])
     }
     SDL_SetTextureBlendMode(offscreen, SDL_BLENDMODE_BLEND_PREMULTIPLIED);
 
-    // ---------- 2. 加载纹理 ----------
-    TextureInfo tex_info = LoadTextureFromPNG(renderer, "images/results/demo.png");
-    if (!tex_info.texture) {
-        SDL_Log("Failed to load texture.");
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return -1;
-    }
-    SDL_Log("Texture size: %dx%d", tex_info.width, tex_info.height);
-
+    // ---------- 2. 加载 target 纹理 ----------
     TextureInfo target_tex_info = LoadTextureFromPNG(renderer, "images/results/target.png");
     if (!target_tex_info.texture) {
         SDL_Log("Failed to load target texture.");
-        SDL_DestroyTexture(tex_info.texture);
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -79,19 +68,7 @@ int main(int argc, char* argv[])
     }
     SDL_Log("Target texture size: %dx%d", target_tex_info.width, target_tex_info.height);
 
-    TextureInfo flowing_arrow_tex_info = LoadTextureFromPNG(renderer, "images/results/flowing_arrow.png");
-    if (!flowing_arrow_tex_info.texture) {
-        SDL_Log("Failed to load flowing_arrow texture.");
-        SDL_DestroyTexture(tex_info.texture);
-        SDL_DestroyTexture(target_tex_info.texture);
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return -1;
-    }
-    SDL_Log("flowing_arrow texture size: %dx%d", flowing_arrow_tex_info.width, flowing_arrow_tex_info.height);
-
-    // ---------- 2c. 读取关键点文件 ----------
+    // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> keypoints = LoadKeypointsFromFile("images/results/target.txt");
 
     // ---------- 3. 设置相机参数 ----------
@@ -113,47 +90,18 @@ int main(int argc, char* argv[])
 
     // ---------- 4. 构建场景节点系统 ----------
     Scene scene;
-    double base_height = 2.0;
-    double base_width = base_height * (double)tex_info.width / (double)tex_info.height;
-    double rect_depth = 2.0;
 
-    // ===== 4a. 前方纹理图像 =====
-    ImageNode* front_node = CreateImageNode(scene,
-                    tex_info.texture, tex_info.width, tex_info.height,
-                    base_width, base_height,
-                    -3.0, 0.0, rect_depth,
-                    1.0f,
-                    {}, nullptr);
-    
-    front_node -> SetLocalRotation(-M_PI/4, 0.0, 0.0);
-
-    // ===== 4b. 后方纹理图像（半透明，可本体旋转） =====
-    double back_z = rect_depth + 3.0;
-    ImageNode* back_node = CreateImageNode(scene,
-                                           tex_info.texture, tex_info.width, tex_info.height,
-                                           base_width, base_height,
-                                           0.0, 0.0, back_z,
-                                           0.7f,
-                                           {}, nullptr);
-
-    // ===== 4c. target 图像（作为 BackImage 的子节点） =====
+    // ===== target 图像（直接固定在 scene 中，不设置父节点） =====
     double target_base_height = 5.0;
     double target_base_width = target_base_height * (double)target_tex_info.width / (double)target_tex_info.height;
-    double target_local_z = 6.0;
+    double target_pos_z = 5.0;  // 放置在相机前方
 
     ImageNode* target_node = CreateImageNode(scene,
                                              target_tex_info.texture, target_tex_info.width, target_tex_info.height,
                                              target_base_width, target_base_height,
-                                             0.0, 0.0, target_local_z,
+                                             0.0, 0.0, target_pos_z,
                                              1.0f,
-                                             keypoints, back_node);
-
-    ImageNode* flowing_arrow_node = CreateImageNode(scene,
-                                                    flowing_arrow_tex_info.texture, flowing_arrow_tex_info.width, flowing_arrow_tex_info.height,
-                                                    60.0*0.01, 330.0*0.01,
-                                                    2, 0.0, rect_depth,
-                                                    1.0f,
-                                                    {}, nullptr);
+                                             keypoints, nullptr);
 
     // 预渲染关键点序号纹理
     std::vector<SDL_Texture*> index_textures(keypoints.size(), nullptr);
@@ -179,27 +127,9 @@ int main(int argc, char* argv[])
     float mouse_sensitivity = 0.002f;
     float move_speed = 2.0f;
 
-    // TargetImage 本体旋转
-    double target_yaw = 0.0;
-    double target_pitch = 0.0;
-    double target_roll = 0.0;
-
-    // BackImage 本体旋转
-    double back_yaw = 0.0;
-    double back_pitch = 0.0;
-    double back_roll = 0.0;
-
-    float obj_rot_speed = 2.0f;
-
-    // true = 旋转 TargetImage, false = 旋转 BackImage
-    bool rotate_target_mode = true;
-
     bool key_w = false, key_s = false, key_a = false, key_d = false;
     bool key_up = false, key_down = false;
     bool key_q = false, key_e = false;
-    bool key_j = false, key_l = false;
-    bool key_i = false, key_k = false;
-    bool key_u = false, key_o = false;
 
     float roll_speed = 1.5f;
     bool screenshot_requested = false;
@@ -221,8 +151,6 @@ int main(int argc, char* argv[])
     SDL_Log("Click inside the window to capture mouse. Move mouse to look around.");
     SDL_Log("WASD: move | SPACE: up | SHIFT: down | ESC: release/quit");
     SDL_Log("Q/E: roll camera | R: reset roll");
-    SDL_Log("I/J/K/L/U/O: rotate (Yaw/Pitch/Roll)");
-    SDL_Log("N: toggle rotation target (TargetImage <-> BackImage)");
     SDL_Log("M: toggle keypoints | P: screenshot");
 
     uint64_t prev_ticks = SDL_GetTicks();
@@ -267,19 +195,6 @@ int main(int argc, char* argv[])
                 case SDLK_Q: key_q = true; break;
                 case SDLK_E: key_e = true; break;
                 case SDLK_R: camera.roll = 0.0; break;
-                case SDLK_J: key_j = true; break;
-                case SDLK_L: key_l = true; break;
-                case SDLK_I: key_i = true; break;
-                case SDLK_K: key_k = true; break;
-                case SDLK_U: key_u = true; break;
-                case SDLK_O: key_o = true; break;
-                case SDLK_N:
-                    if (event.key.repeat == 0) {
-                        rotate_target_mode = !rotate_target_mode;
-                        SDL_Log("Rotating: %s",
-                                rotate_target_mode ? "TargetImage" : "BackImage");
-                    }
-                    break;
                 case SDLK_M:
                     if (event.key.repeat == 0) {
                         show_keypoints = !show_keypoints;
@@ -305,12 +220,6 @@ int main(int argc, char* argv[])
                 case SDLK_LSHIFT: case SDLK_RSHIFT: key_down = false; break;
                 case SDLK_Q: key_q = false; break;
                 case SDLK_E: key_e = false; break;
-                case SDLK_J: key_j = false; break;
-                case SDLK_L: key_l = false; break;
-                case SDLK_I: key_i = false; break;
-                case SDLK_K: key_k = false; break;
-                case SDLK_U: key_u = false; break;
-                case SDLK_O: key_o = false; break;
                 default: break;
                 }
                 break;
@@ -354,29 +263,6 @@ int main(int argc, char* argv[])
         if (key_q) camera.roll += roll_speed * dt;
         if (key_e) camera.roll -= roll_speed * dt;
 
-        // ---------- 图像旋转（N 键切换目标） ----------
-        if (key_j) (rotate_target_mode ? target_yaw : back_yaw)   += obj_rot_speed * dt;
-        if (key_l) (rotate_target_mode ? target_yaw : back_yaw)   -= obj_rot_speed * dt;
-        if (key_i) (rotate_target_mode ? target_pitch : back_pitch) += obj_rot_speed * dt;
-        if (key_k) (rotate_target_mode ? target_pitch : back_pitch) -= obj_rot_speed * dt;
-        if (key_u) (rotate_target_mode ? target_roll : back_roll)  += obj_rot_speed * dt;
-        if (key_o) (rotate_target_mode ? target_roll : back_roll)  -= obj_rot_speed * dt;
-
-        // ---------- 更新节点变换 ----------
-        if (target_node) {
-            target_node->SetLocalRotation(target_yaw, target_pitch, target_roll);
-        }
-        if (back_node) {
-            back_node->SetLocalRotation(back_yaw, back_pitch, back_roll);
-            back_node->SetLocalPosition(back_yaw, back_pitch, back_roll + back_z);
-        }
-
-        // ---------- 图像更新 ----------
-        flowing_arrow_node -> SetTextureOffset(
-            0.0,
-            flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
-        );
-
         // =============================================================
         // 渲染步骤：离屏渲染 → 覆盖层 → 截图 → 显示
         // =============================================================
@@ -395,7 +281,6 @@ int main(int argc, char* argv[])
 
         // ---- Step 4: 关键点渲染 ----
         if (show_keypoints && !keypoints.empty() && target_node) {
-            // 在外部完成所有附加纹理的合并（序号 + 坐标标签）
             std::vector<std::vector<ExtraTextureInfo>> all_textures;
             BuildKeypointAllTextures(
                 *target_node, renderer,
@@ -407,7 +292,6 @@ int main(int argc, char* argv[])
                 cached_cam_texts, cam_textures,
                 cached_pix_texts, pix_textures);
 
-            // 关键点渲染只传入一个合并后的附加纹理
             target_node->RenderKeypoints(
                 renderer, intrinsics, distortion,
                 cam_pos, camera.yaw, camera.pitch, camera.roll,
@@ -417,7 +301,7 @@ int main(int argc, char* argv[])
         // ---- Step 5: 截图 ----
         if (screenshot_requested) {
             screenshot_requested = false;
-            SaveScreenshot(renderer, "screenshot/screenshot");
+            SaveScreenshot(renderer, "screenshot/demo_screenshot");
         }
 
         // ---- Step 6: 呈现到窗口 ----
@@ -443,7 +327,6 @@ int main(int argc, char* argv[])
     }
     if (target_tex_info.texture) SDL_DestroyTexture(target_tex_info.texture);
     SDL_DestroyTexture(offscreen);
-    SDL_DestroyTexture(tex_info.texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
