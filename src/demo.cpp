@@ -20,6 +20,13 @@ struct fan_node_group_t {
     ImageNode* fan_light_node;
     ImageNode* target_node;
     ImageNode* flowing_arrow_node;
+
+    SceneNode* sketchy_baffle_node;
+    SceneNode* sketchy_baffle_oblique_node;
+    SceneNode* sketchy_baffle_front_node;
+    SceneNode* sketchy_baffle_left_side_node;
+    SceneNode* sketchy_baffle_right_side_node;
+    SceneNode* sketchy_baffle_behind_node;
 };
 
 // -----------------------------------------------------------------------------
@@ -81,6 +88,12 @@ int main(int argc, char* argv[])
     TextureInfo fan_light_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_light.png");
     SDL_Log("fan_light texture size: %dx%d", fan_light_tex_info.width, fan_light_tex_info.height);
 
+    TextureInfo rectangle_tex_info = LoadTextureFromPNG(renderer, "images/results/rectangle.png");
+    SDL_Log("rectangle texture size: %dx%d", rectangle_tex_info.width, rectangle_tex_info.height);
+
+    TextureInfo triangle_tex_info = LoadTextureFromPNG(renderer, "images/results/triangle.png");
+    SDL_Log("triangle texture size: %dx%d", triangle_tex_info.width, triangle_tex_info.height);
+
     // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> target_keypoints = LoadKeypointsFromFile("images/results/target.txt");
     std::vector<Keypoint> flowing_arrow_keypoints = LoadKeypointsFromFile("images/results/flowing_arrow.txt");
@@ -106,6 +119,8 @@ int main(int argc, char* argv[])
     // 单位：m
     Scene scene;
 
+    // 中心节点
+
     SceneNode* rune_base_node = CreateSceneNode(scene, 0.0, 0.0, 3.0, nullptr);
 
     ImageNode* front_center_R_node = CreateImageNode(scene,
@@ -113,15 +128,17 @@ int main(int argc, char* argv[])
                                         0.106, 0.106,
                                         0.0, 0.0, -0.3328-0.1664,
                                         1.0f,
-                                        {}, rune_base_node, 2);
+                                        {}, rune_base_node, 3);
+
+    // 前方扇叶节点
 
     SceneNode* front_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, -0.3328, rune_base_node);
 
-    std::vector<fan_node_group_t> fan_node_groups(5);
+    std::vector<fan_node_group_t> front_fan_node_groups(5);
 
     for (int i = 0; i < 5; i += 1) {
         double relative_rotate_rad = M_PI * 2.0 / 5.0 * i;
-        auto& fan_node_group = fan_node_groups[i];
+        auto& fan_node_group = front_fan_node_groups[i];
 
         fan_node_group.fan_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, front_fan_rotation_center_node);
         fan_node_group.fan_node -> SetLocalRotation(0.0, 0.0, relative_rotate_rad);
@@ -153,7 +170,135 @@ int main(int argc, char* argv[])
                                             0.0, -0.1543-0.02-0.33/2.0, 0.0,
                                             1.0f,
                                             flowing_arrow_keypoints, fan_node_group.fan_node, 1);
+
+        // 挡板节点
+
+        fan_node_group.sketchy_baffle_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, fan_node_group.fan_node);
+        fan_node_group.sketchy_baffle_oblique_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, fan_node_group.sketchy_baffle_node);
+        fan_node_group.sketchy_baffle_oblique_node -> SetLocalRotation(0.0, 0.0,  M_PI * 2.0 / 5.0 / 2.0);
+
+        fan_node_group.sketchy_baffle_front_node = CreateImageNode(scene,
+                                            rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                            0.0646, 0.3512,
+                                            0.0, -0.3093/2.0, -0.1664/2.0,
+                                            1.0f,
+                                            {}, fan_node_group.sketchy_baffle_oblique_node, 2);
+        fan_node_group.sketchy_baffle_front_node -> SetLocalRotation(0.0, 0.49357497674, 0.0);
+
+        fan_node_group.sketchy_baffle_left_side_node = CreateImageNode(scene,
+                                            triangle_tex_info.texture, triangle_tex_info.width, triangle_tex_info.height,
+                                            0.3093, 0.1664,
+                                            -0.0646/2.0, -0.3093/2.0, -0.1664/2.0,
+                                            1.0f,
+                                            {}, fan_node_group.sketchy_baffle_oblique_node, 2);
+        fan_node_group.sketchy_baffle_left_side_node -> SetLocalRotation(M_PI/2.0, 0.0, M_PI/2.0);
+
+        fan_node_group.sketchy_baffle_right_side_node = CreateImageNode(scene,
+                                            triangle_tex_info.texture, triangle_tex_info.width, triangle_tex_info.height,
+                                            0.3093, 0.1664,
+                                            0.0646/2.0, -0.3093/2.0, -0.1664/2.0,
+                                            1.0f,
+                                            {}, fan_node_group.sketchy_baffle_oblique_node, 2);
+        fan_node_group.sketchy_baffle_right_side_node -> SetLocalRotation(M_PI/2.0, 0.0, M_PI/2.0);
+
+        fan_node_group.sketchy_baffle_behind_node = CreateImageNode(scene,
+                                            rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                            0.136, 0.1543,
+                                            0.0, -0.1543/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.sketchy_baffle_node, 2);
     }
+
+    // 支架节点
+
+    SceneNode* sketchy_support_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, rune_base_node);
+
+    ImageNode* sketchy_support_horizontal_node = CreateImageNode(scene,
+                                        rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                        2.06, 0.175,
+                                        0.0, 0.0, 0.0,
+                                        1.0f,
+                                        {}, sketchy_support_node, 0);
+
+    ImageNode* sketchy_support_vertical_left_node = CreateImageNode(scene,
+                                        rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                        0.175, 2.3,
+                                        -2.06/2.0-0.175/2.0, 2.3/2.0-0.175/2.0, 0.0,
+                                        1.0f,
+                                        {}, sketchy_support_node, 0);
+
+    ImageNode* sketchy_support_vertical_right_node = CreateImageNode(scene,
+                                        rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                        0.175, 2.3,
+                                        2.06/2.0+0.175/2.0, 2.3/2.0-0.175/2.0, 0.0,
+                                        1.0f,
+                                        {}, sketchy_support_node, 0);
+
+    // 后方扇叶节点
+
+    SceneNode* behind_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, 0.3328, rune_base_node);
+    behind_fan_rotation_center_node -> SetLocalRotation(M_PI, 0.0, 0.0);
+
+    std::vector<fan_node_group_t> behind_fan_node_groups(5);
+
+    for (int i = 0; i < 5; i += 1) {
+        double relative_rotate_rad = M_PI * 2.0 / 5.0 * i;
+        auto& fan_node_group = behind_fan_node_groups[i];
+
+        fan_node_group.fan_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, behind_fan_rotation_center_node);
+        fan_node_group.fan_node -> SetLocalRotation(0.0, 0.0, relative_rotate_rad);
+
+        fan_node_group.fan_background_node = CreateImageNode(scene,
+                                            fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
+                                            0.4151, 0.7419,
+                                            0.0, -0.1543-0.7419/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 0);
+
+        fan_node_group.fan_light_node = nullptr;
+
+        fan_node_group.target_node = nullptr;
+        
+        fan_node_group.flowing_arrow_node = nullptr;
+
+        // 挡板节点
+
+        fan_node_group.sketchy_baffle_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, fan_node_group.fan_node);
+        fan_node_group.sketchy_baffle_oblique_node = CreateSceneNode(scene, 0.0, 0.0, 0.0, fan_node_group.sketchy_baffle_node);
+        fan_node_group.sketchy_baffle_oblique_node -> SetLocalRotation(0.0, 0.0,  M_PI * 2.0 / 5.0 / 2.0);
+
+        fan_node_group.sketchy_baffle_front_node = CreateImageNode(scene,
+                                            rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                            0.0646, 0.3512,
+                                            0.0, -0.3093/2.0+(0.3512-0.3093)/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.sketchy_baffle_oblique_node, 0);
+        // fan_node_group.sketchy_baffle_front_node -> SetLocalRotation(0.0, 0.49357497674, 0.0);
+
+        fan_node_group.sketchy_baffle_left_side_node = nullptr;
+        // fan_node_group.sketchy_baffle_left_side_node -> SetLocalRotation(M_PI/2.0, 0.0, M_PI/2.0);
+
+        fan_node_group.sketchy_baffle_right_side_node = nullptr;
+        // fan_node_group.sketchy_baffle_right_side_node -> SetLocalRotation(M_PI/2.0, 0.0, M_PI/2.0);
+
+        fan_node_group.sketchy_baffle_behind_node = CreateImageNode(scene,
+                                            rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
+                                            0.136, 0.1543,
+                                            0.0, -0.1543/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.sketchy_baffle_node, 0);
+    }
+
+    // 背景节点
+
+    // TextureInfo test_tex_info = LoadTextureFromPNG(renderer, "images/results/test.png");
+    // ImageNode* front_node = CreateImageNode(scene,
+    //                 test_tex_info.texture, test_tex_info.width, test_tex_info.height,
+    //                 2560.0 * 5e-3, 1440.0 * 5e-3,
+    //                 0.0, 0.0, 5,
+    //                 1.0f,
+    //                 {}, nullptr, -1);
+
 
     // ---------- 5. 控制状态 ----------
     bool mouse_grabbed = false;
@@ -298,24 +443,25 @@ int main(int argc, char* argv[])
         // ---------- 节点位置变换 ----------
         rune_roll_rad += rune_roll_speed * dt;
         front_fan_rotation_center_node -> SetLocalRotation(0.0, 0.0, rune_roll_rad);
+        behind_fan_rotation_center_node -> SetLocalRotation(M_PI, 0.0, -rune_roll_rad);
 
         // ---------- 图像更新 ----------
         switch (show_light_type)
         {
             case 0:
-                for (auto& fan_node_group : fan_node_groups) {
+                for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                 }
                 break;
             case 1:
-                for (auto& fan_node_group : fan_node_groups) {
+                for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
                 }
                 break;
             case 2:
-                for (auto& fan_node_group : fan_node_groups) {
+                for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(1.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                 }
@@ -325,7 +471,7 @@ int main(int argc, char* argv[])
                 break;
         }
         
-        for (auto& fan_node_group : fan_node_groups) {
+        for (auto& fan_node_group : front_fan_node_groups) {
             fan_node_group.flowing_arrow_node -> SetTextureOffset(
                 0.0,
                 fan_node_group.flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
@@ -370,7 +516,7 @@ int main(int argc, char* argv[])
 
         // ---- Step 4: 关键点渲染 ----
         if (show_keypoints) {
-            for (auto& fan_node_group : fan_node_groups) {
+            for (auto& fan_node_group : front_fan_node_groups) {
                 auto* keypoints_node = fan_node_group.target_node;
                 std::vector<KeypointProjection> projections;
                 std::vector<std::vector<ExtraTextureInfo>> all_textures;

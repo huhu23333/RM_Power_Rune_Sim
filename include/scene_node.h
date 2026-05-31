@@ -14,8 +14,8 @@
 const double SUBDIV_SCALE = 0.005;
 const int SUBDIV_MAXNUM = 16;
 #else
-const double SUBDIV_SCALE = 0.0005;
-const int SUBDIV_MAXNUM = 64;
+const double SUBDIV_SCALE = 0.005;
+const int SUBDIV_MAXNUM = 16;
 #endif
 
 void ComputeWorldToCameraMatrix(double yaw, double pitch, double roll, double rot[3][3]);
