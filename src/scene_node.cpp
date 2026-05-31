@@ -480,8 +480,8 @@ void ImageNode::SetTextureOffset(float offset_x, float offset_y)
 float ImageNode::GetTextureOffsetX() const { return m_offset_x; }
 float ImageNode::GetTextureOffsetY() const { return m_offset_y; }
 
-const std::vector<RenderFace>& ImageNode::GetFaces() const { return m_faces; }
-std::vector<RenderFace>& ImageNode::GetFaces() { return m_faces; }
+const RenderFace& ImageNode::GetFace() const { return m_face; }
+RenderFace& ImageNode::GetFace() { return m_face; }
 
 SDL_Texture* ImageNode::GetTexture() const { return m_texture; }
 int ImageNode::GetTexWidth() const { return m_tex_width; }
@@ -530,8 +530,9 @@ void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
         if (cam_pt.z <= 0.001) continue;
 
         Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
-        if (std::isnan(screen_pt.x) || std::isnan(screen_pt.y) ||
-            std::abs(screen_pt.x) > MAX_COORD || std::abs(screen_pt.y) > MAX_COORD)
+        if (std::isnan(screen_pt.x) || std::isnan(screen_pt.y) || 
+            std::abs(screen_pt.x) > MAX_COORD || std::abs(screen_pt.y) > MAX_COORD || 
+            !screen_pt.valid)
             continue;
 
         float sx = (float)screen_pt.x;
@@ -553,7 +554,6 @@ void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
 
 void ImageNode::UpdateFaces()
 {
-    m_faces.clear();
     if (!m_texture) return;
 
     double hw = m_display_width / 2.0;
@@ -567,25 +567,20 @@ void ImageNode::UpdateFaces()
                        m_offset_x + 1.0f, m_offset_y + 1.0f);
     face.texture = m_texture;
     face.color = { 1.0f, 1.0f, 1.0f, m_alpha };
-    m_faces.push_back(std::move(face));
+    m_face = std::move(face);
 }
 
 void ImageNode::Render(SDL_Renderer* renderer,
                         const CameraIntrinsics& intrinsics,
                         const DistortionCoefficients& distortion,
                         const Point3D& cam_pos,
-                        double cam_yaw, double cam_pitch, double cam_roll,
-                        bool /*apply_body_rotation*/,
-                        double /*body_rot_yaw*/,
-                        double /*body_rot_pitch*/,
-                        double /*body_rot_roll*/)
+                        double cam_yaw, double cam_pitch, double cam_roll)
 {
     struct SortedFace {
         const RenderFace* face;
         std::vector<SDL_Vertex> sdl_verts;
-        double cam_z;
     };
-    std::vector<SortedFace> sorted_faces;
+    SortedFace sorted_face;
     const float MAX_COORD = 1e6f;
 
     // 预先计算世界 → 相机的旋转矩阵
@@ -596,65 +591,53 @@ void ImageNode::Render(SDL_Renderer* renderer,
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
     SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
 
-    for (const auto& face : m_faces) {
-        SortedFace sf;
-        sf.face = &face;
-        sf.sdl_verts.reserve(face.world_verts.size());
-        double z_sum = 0.0;
-        int visible_tris = 0;
+    SortedFace sf;
+    sf.face = &m_face;
+    sf.sdl_verts.reserve(m_face.world_verts.size());
+    double z_sum = 0.0;
+    int visible_tris = 0;
 
-        for (size_t i = 0; i < face.world_verts.size(); i += 3) {
-            const WorldVertex& wv0 = face.world_verts[i];
-            const WorldVertex& wv1 = face.world_verts[i + 1];
-            const WorldVertex& wv2 = face.world_verts[i + 2];
+    for (size_t i = 0; i < m_face.world_verts.size(); i += 3) {
+        const WorldVertex& wv0 = m_face.world_verts[i];
+        const WorldVertex& wv1 = m_face.world_verts[i + 1];
+        const WorldVertex& wv2 = m_face.world_verts[i + 2];
 
-            Point3D r0 = LocalToWorld(wv0.pos);
-            Point3D r1 = LocalToWorld(wv1.pos);
-            Point3D r2 = LocalToWorld(wv2.pos);
+        Point3D r0 = LocalToWorld(wv0.pos);
+        Point3D r1 = LocalToWorld(wv1.pos);
+        Point3D r2 = LocalToWorld(wv2.pos);
 
-            Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
-            Point3D c1 = WorldToCameraTransform(r1, cam_pos, cam_rot);
-            Point3D c2 = WorldToCameraTransform(r2, cam_pos, cam_rot);
+        Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
+        Point3D c1 = WorldToCameraTransform(r1, cam_pos, cam_rot);
+        Point3D c2 = WorldToCameraTransform(r2, cam_pos, cam_rot);
 
-            Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
-            Point2D pp1 = ProjectPoint(c1, intrinsics, distortion);
-            Point2D pp2 = ProjectPoint(c2, intrinsics, distortion);
+        Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
+        Point2D pp1 = ProjectPoint(c1, intrinsics, distortion);
+        Point2D pp2 = ProjectPoint(c2, intrinsics, distortion);
 
-            if (!pp0.valid && !pp1.valid && !pp2.valid)
-                continue;
-            if (std::isnan(pp0.x) || std::isnan(pp0.y) ||
-                std::isnan(pp1.x) || std::isnan(pp1.y) ||
-                std::isnan(pp2.x) || std::isnan(pp2.y))
-                continue;
-            if (std::abs(pp0.x) > MAX_COORD || std::abs(pp0.y) > MAX_COORD ||
-                std::abs(pp1.x) > MAX_COORD || std::abs(pp1.y) > MAX_COORD ||
-                std::abs(pp2.x) > MAX_COORD || std::abs(pp2.y) > MAX_COORD)
-                continue;
+        if (!pp0.valid && !pp1.valid && !pp2.valid)
+            continue;
+        if (std::isnan(pp0.x) || std::isnan(pp0.y) ||
+            std::isnan(pp1.x) || std::isnan(pp1.y) ||
+            std::isnan(pp2.x) || std::isnan(pp2.y))
+            continue;
+        if (std::abs(pp0.x) > MAX_COORD || std::abs(pp0.y) > MAX_COORD ||
+            std::abs(pp1.x) > MAX_COORD || std::abs(pp1.y) > MAX_COORD ||
+            std::abs(pp2.x) > MAX_COORD || std::abs(pp2.y) > MAX_COORD)
+            continue;
 
-            SDL_FColor face_color = face.color;
-            face_color.a = m_alpha;
+        SDL_FColor face_color = m_face.color;
+        face_color.a = m_alpha;
 
-            sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
-            sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
-            sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
-            z_sum += c0.z + c1.z + c2.z;
-            visible_tris += 3;
-        }
-
-        if (visible_tris > 0) {
-            sf.cam_z = z_sum / visible_tris;
-            sorted_faces.push_back(std::move(sf));
-        }
+        sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
+        sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
+        sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
+        z_sum += c0.z + c1.z + c2.z;
+        visible_tris += 3;
     }
 
-    std::sort(sorted_faces.begin(), sorted_faces.end(),
-        [](const SortedFace& a, const SortedFace& b) { return a.cam_z > b.cam_z; });
-
-    for (const auto& sf : sorted_faces) {
-        SDL_RenderGeometry(renderer, sf.face->texture,
-                           sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
-                           nullptr, 0);
-    }
+    SDL_RenderGeometry(renderer, sf.face->texture,
+                        sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
+                        nullptr, 0);
 
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
@@ -728,63 +711,62 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         const ImageNode* img_node = dynamic_cast<const ImageNode*>(node.get());
         if (!img_node) continue;
 
-        for (const auto& face : img_node->GetFaces()) {
-            SortedFace sf;
-            sf.face = &face;
-            sf.node = img_node;
-            sf.sdl_verts.reserve(face.world_verts.size());
-            double distance_sum = 0.0;
-            int visible_tris = 0;
-            sf.render_priority = img_node->getRenderPriority();
+        auto& face = img_node->GetFace();
+        SortedFace sf;
+        sf.face = &face;
+        sf.node = img_node;
+        sf.sdl_verts.reserve(face.world_verts.size());
+        double distance_sum = 0.0;
+        int visible_tris = 0;
+        sf.render_priority = img_node->getRenderPriority();
 
-            for (size_t i = 0; i < face.world_verts.size(); i += 3) {
-                const WorldVertex& wv0 = face.world_verts[i];
-                const WorldVertex& wv1 = face.world_verts[i + 1];
-                const WorldVertex& wv2 = face.world_verts[i + 2];
+        for (size_t i = 0; i < face.world_verts.size(); i += 3) {
+            const WorldVertex& wv0 = face.world_verts[i];
+            const WorldVertex& wv1 = face.world_verts[i + 1];
+            const WorldVertex& wv2 = face.world_verts[i + 2];
 
-                Point3D r0 = img_node->LocalToWorld(wv0.pos);
-                Point3D r1 = img_node->LocalToWorld(wv1.pos);
-                Point3D r2 = img_node->LocalToWorld(wv2.pos);
+            Point3D r0 = img_node->LocalToWorld(wv0.pos);
+            Point3D r1 = img_node->LocalToWorld(wv1.pos);
+            Point3D r2 = img_node->LocalToWorld(wv2.pos);
 
-                Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
-                Point3D c1 = WorldToCameraTransform(r1, cam_pos, cam_rot);
-                Point3D c2 = WorldToCameraTransform(r2, cam_pos, cam_rot);
+            Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
+            Point3D c1 = WorldToCameraTransform(r1, cam_pos, cam_rot);
+            Point3D c2 = WorldToCameraTransform(r2, cam_pos, cam_rot);
 
-                Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
-                Point2D pp1 = ProjectPoint(c1, intrinsics, distortion);
-                Point2D pp2 = ProjectPoint(c2, intrinsics, distortion);
+            Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
+            Point2D pp1 = ProjectPoint(c1, intrinsics, distortion);
+            Point2D pp2 = ProjectPoint(c2, intrinsics, distortion);
 
-                if (!pp0.valid && !pp1.valid && !pp2.valid)
-                    continue;
-                if (std::isnan(pp0.x) || std::isnan(pp0.y) ||
-                    std::isnan(pp1.x) || std::isnan(pp1.y) ||
-                    std::isnan(pp2.x) || std::isnan(pp2.y))
-                    continue;
-                if (std::abs(pp0.x) > MAX_COORD || std::abs(pp0.y) > MAX_COORD ||
-                    std::abs(pp1.x) > MAX_COORD || std::abs(pp1.y) > MAX_COORD ||
-                    std::abs(pp2.x) > MAX_COORD || std::abs(pp2.y) > MAX_COORD)
-                    continue;
+            if (!pp0.valid && !pp1.valid && !pp2.valid)
+                continue;
+            if (std::isnan(pp0.x) || std::isnan(pp0.y) ||
+                std::isnan(pp1.x) || std::isnan(pp1.y) ||
+                std::isnan(pp2.x) || std::isnan(pp2.y))
+                continue;
+            if (std::abs(pp0.x) > MAX_COORD || std::abs(pp0.y) > MAX_COORD ||
+                std::abs(pp1.x) > MAX_COORD || std::abs(pp1.y) > MAX_COORD ||
+                std::abs(pp2.x) > MAX_COORD || std::abs(pp2.y) > MAX_COORD)
+                continue;
 
-                SDL_FColor face_color = face.color;
-                face_color.a = img_node->GetAlpha();
+            SDL_FColor face_color = face.color;
+            face_color.a = img_node->GetAlpha();
 
-                sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
-                sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
-                sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
-                
-                Point3D c_center = {
-                    (c0.x + c1.x + c2.x) / 3.0,
-                    (c0.y + c1.y + c2.y) / 3.0,
-                    (c0.z + c1.z + c2.z) / 3.0
-                };
-                distance_sum += std::sqrt(c_center.x * c_center.x + c_center.y * c_center.y + c_center.z * c_center.z);
-                visible_tris += 1;
-            }
+            sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
+            sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
+            sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
+            
+            Point3D c_center = {
+                (c0.x + c1.x + c2.x) / 3.0,
+                (c0.y + c1.y + c2.y) / 3.0,
+                (c0.z + c1.z + c2.z) / 3.0
+            };
+            distance_sum += std::sqrt(c_center.x * c_center.x + c_center.y * c_center.y + c_center.z * c_center.z);
+            visible_tris += 1;
+        }
 
-            if (visible_tris > 0) {
-                sf.cam_distance = distance_sum / visible_tris;
-                sorted_faces.push_back(std::move(sf));
-            }
+        if (visible_tris > 0) {
+            sf.cam_distance = distance_sum / visible_tris;
+            sorted_faces.push_back(std::move(sf));
         }
     }
 

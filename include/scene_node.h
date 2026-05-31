@@ -78,11 +78,7 @@ public:
                         const CameraIntrinsics& intrinsics,
                         const DistortionCoefficients& distortion,
                         const Point3D& cam_pos,
-                        double cam_yaw, double cam_pitch, double cam_roll,
-                        bool apply_body_rotation = false,
-                        double body_rot_yaw = 0.0,
-                        double body_rot_pitch = 0.0,
-                        double body_rot_roll = 0.0) {}
+                        double cam_yaw, double cam_pitch, double cam_roll) {}
 
 protected:
     SceneNode* m_parent = nullptr;
@@ -172,8 +168,8 @@ public:
     float GetTextureOffsetX() const;
     float GetTextureOffsetY() const;
 
-    const std::vector<RenderFace>& GetFaces() const;
-    std::vector<RenderFace>& GetFaces();
+    const RenderFace& GetFace() const;
+    RenderFace& GetFace();
 
     SDL_Texture* GetTexture() const;
     int GetTexWidth() const;
@@ -195,11 +191,7 @@ public:
                 const CameraIntrinsics& intrinsics,
                 const DistortionCoefficients& distortion,
                 const Point3D& cam_pos,
-                double cam_yaw, double cam_pitch, double cam_roll,
-                bool apply_body_rotation = false,
-                double body_rot_yaw = 0.0,
-                double body_rot_pitch = 0.0,
-                double body_rot_roll = 0.0) override;
+                double cam_yaw, double cam_pitch, double cam_roll) override;
     
     void SetRenderPriority(int new_render_priority);
     int getRenderPriority() const;
@@ -217,7 +209,7 @@ private:
     float m_alpha = 1.0f;
     float m_offset_x = 0.0f;
     float m_offset_y = 0.0f;
-    std::vector<RenderFace> m_faces;
+    RenderFace m_face;
     std::vector<Keypoint> m_keypoints;
     int render_priority = 0;
 };

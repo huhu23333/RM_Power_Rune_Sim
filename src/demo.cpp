@@ -358,6 +358,7 @@ int main(int argc, char* argv[])
         BeginOffscreenRender(renderer, offscreen);
 
         // ---- Step 2: 渲染场景节点 ----
+        // fan_node_groups[0].target_node->Render(renderer, intrinsics, distortion, cam_pos, camera.yaw, camera.pitch, camera.roll);
         scene.RenderAll(renderer, intrinsics, distortion, cam_pos,
                         camera.yaw, camera.pitch, camera.roll);
 
