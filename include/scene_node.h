@@ -8,6 +8,16 @@
 #include <memory>
 #include <string>
 
+// #define SORT_BY_TRIANGLES
+
+#ifdef SORT_BY_TRIANGLES
+const double SUBDIV_SCALE = 0.005;
+const int SUBDIV_MAXNUM = 16;
+#else
+const double SUBDIV_SCALE = 0.0005;
+const int SUBDIV_MAXNUM = 64;
+#endif
+
 void ComputeWorldToCameraMatrix(double yaw, double pitch, double roll, double rot[3][3]);
 void EulerToMatrix(double yaw, double pitch, double roll, double rot[3][3]);
 void MultiplyMatrix(const double a[3][3], const double b[3][3], double out[3][3]);
@@ -114,9 +124,6 @@ struct RenderFace {
     SDL_Texture* texture = nullptr;
     SDL_FColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
-
-const double SUBDIV_SCALE = 0.005;
-const int SUBDIV_MAXNUM = 64;
 
 // 工具函数
 void BuildFaceTriangles(RenderFace& face,

@@ -680,6 +680,112 @@ void Scene::UpdateAllTransforms()
     }
 }
 
+#ifdef SORT_BY_TRIANGLES
+void Scene::RenderAll(SDL_Renderer* renderer,
+                       const CameraIntrinsics& intrinsics,
+                       const DistortionCoefficients& distortion,
+                       const Point3D& cam_pos,
+                       double cam_yaw, double cam_pitch, double cam_roll) const
+{
+    struct SortedTriangle {
+        SDL_Texture* texture;
+        SDL_Vertex verts[3];
+        double distance;        // 三角形中心到相机的距离
+        int render_priority;
+    };
+    std::vector<SortedTriangle> sorted_triangles;
+
+    const float MAX_COORD = 1e6f;
+
+    // 预先计算世界 → 相机的旋转矩阵
+    double cam_rot[3][3];
+    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+
+    // 设置纹理地址模式（所有三角形共用，只需设置一次）
+    SDL_TextureAddressMode prev_u, prev_v;
+    SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
+    SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
+
+    for (const auto& node : m_nodes) {
+        const ImageNode* img_node = dynamic_cast<const ImageNode*>(node.get());
+        if (!img_node) continue;
+
+        const RenderFace& face = img_node->GetFace();
+        const int priority = img_node->getRenderPriority();
+        const float alpha = img_node->GetAlpha();
+
+        // 计算所有顶点的屏幕坐标和相机距离
+        std::vector<Point2DUVD> p2duv_verts;
+        p2duv_verts.reserve(face.world_verts.size());
+
+        for (size_t i = 0; i < face.world_verts.size(); ++i) {
+            const WorldVertex& wv = face.world_verts[i];
+            Point3D world_pt = img_node->LocalToWorld(wv.pos);
+            Point3D cam_pt = WorldToCameraTransform(world_pt, cam_pos, cam_rot);
+            Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
+            double distance = std::sqrt(cam_pt.x * cam_pt.x + cam_pt.y * cam_pt.y + cam_pt.z * cam_pt.z);
+            p2duv_verts.push_back({ screen_pt, wv.u, wv.v, distance });
+        }
+
+        // 遍历所有三角形，构造 SortedTriangle
+        for (size_t i = 0; i < face.world_verts_indices.size(); ++i) {
+            const TriIndices& idx = face.world_verts_indices[i];
+            const Point2DUVD& p0 = p2duv_verts[idx.i];
+            const Point2DUVD& p1 = p2duv_verts[idx.j];
+            const Point2DUVD& p2 = p2duv_verts[idx.k];
+
+            // 跳过完全无效的三角形
+            if (!p0.point2d.valid && !p1.point2d.valid && !p2.point2d.valid)
+                continue;
+            // 跳过包含 NaN 或超大坐标的三角形
+            if (std::isnan(p0.point2d.x) || std::isnan(p0.point2d.y) ||
+                std::isnan(p1.point2d.x) || std::isnan(p1.point2d.y) ||
+                std::isnan(p2.point2d.x) || std::isnan(p2.point2d.y))
+                continue;
+            if (std::abs(p0.point2d.x) > MAX_COORD || std::abs(p0.point2d.y) > MAX_COORD ||
+                std::abs(p1.point2d.x) > MAX_COORD || std::abs(p1.point2d.y) > MAX_COORD ||
+                std::abs(p2.point2d.x) > MAX_COORD || std::abs(p2.point2d.y) > MAX_COORD)
+                continue;
+
+            // 三角形中心距离：三个顶点距离的平均值
+            double tri_distance = (p0.distance + p1.distance + p2.distance) / 3.0;
+
+            SortedTriangle tri;
+            tri.texture = face.texture;
+            tri.distance = tri_distance;
+            tri.render_priority = priority;
+
+            // 顶点颜色（使用面颜色乘以 alpha）
+            SDL_FColor vert_color = face.color;
+            vert_color.a = alpha;
+
+            tri.verts[0] = { { (float)p0.point2d.x, (float)p0.point2d.y }, vert_color, { p0.u, p0.v } };
+            tri.verts[1] = { { (float)p1.point2d.x, (float)p1.point2d.y }, vert_color, { p1.u, p1.v } };
+            tri.verts[2] = { { (float)p2.point2d.x, (float)p2.point2d.y }, vert_color, { p2.u, p2.v } };
+
+            sorted_triangles.push_back(tri);
+        }
+    }
+
+    // 排序：先按 render_priority 升序（小优先级先渲染），再按距离降序（远的先渲染）
+    std::sort(sorted_triangles.begin(), sorted_triangles.end(),
+        [](const SortedTriangle& a, const SortedTriangle& b) {
+            if (a.render_priority != b.render_priority)
+                return a.render_priority < b.render_priority;
+            return a.distance > b.distance;   // 从远到近
+        });
+
+    // 逐个渲染三角形
+    for (const SortedTriangle& tri : sorted_triangles) {
+        SDL_RenderGeometry(renderer, tri.texture,
+                           tri.verts, 3,
+                           nullptr, 0);
+    }
+
+    // 恢复纹理地址模式
+    SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
+}
+#else
 void Scene::RenderAll(SDL_Renderer* renderer,
                        const CameraIntrinsics& intrinsics,
                        const DistortionCoefficients& distortion,
@@ -782,5 +888,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
+#endif
 
 const std::vector<SceneNodePtr>& Scene::GetAllNodes() const { return m_nodes; }
