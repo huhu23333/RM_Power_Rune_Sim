@@ -189,12 +189,12 @@ void SceneNode::SetParent(SceneNode* parent)
 
 SceneNode* SceneNode::GetParent() const { return m_parent; }
 
-void SceneNode::AddChild(SceneNode* child)
-{
-    if (child) {
-        child->SetParent(this);
-    }
-}
+// void SceneNode::AddChild(SceneNode* child)
+// {
+//     if (child) {
+//         child->SetParent(this);
+//     }
+// }
 
 const std::vector<SceneNode*>& SceneNode::GetChildren() const { return m_children; }
 

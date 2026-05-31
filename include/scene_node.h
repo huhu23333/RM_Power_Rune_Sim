@@ -51,7 +51,7 @@ public:
 
     void SetParent(SceneNode* parent);
     SceneNode* GetParent() const;
-    void AddChild(SceneNode* child);
+    // void AddChild(SceneNode* child);
     const std::vector<SceneNode*>& GetChildren() const;
 
     void SetLocalTransform(const Transform3D& t);

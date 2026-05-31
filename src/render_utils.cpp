@@ -59,7 +59,7 @@ SceneNode* CreateSceneNode(
 
     if (parent) {
         added_ptr -> SetParent(parent);
-        parent -> AddChild(added_ptr);
+        // parent -> AddChild(added_ptr);
     }
 
     return added_ptr;
@@ -90,7 +90,7 @@ ImageNode* CreateImageNode(
 
     if (parent) {
         added_ptr -> SetParent(parent);
-        parent -> AddChild(added_ptr);
+        // parent -> AddChild(added_ptr);
     }
 
     return dynamic_cast<ImageNode*>(added_ptr);
