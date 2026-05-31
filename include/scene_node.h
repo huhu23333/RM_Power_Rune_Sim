@@ -198,7 +198,7 @@ public:
                 const Point3D& cam_pos,
                 double cam_yaw, double cam_pitch, double cam_roll) override;
     
-    void SetRenderPriority(int new_render_priority);
+    void SetRenderPriority(int render_priority);
     int getRenderPriority() const;
 
 protected:
@@ -216,7 +216,7 @@ private:
     float m_offset_y = 0.0f;
     RenderFace m_face;
     std::vector<Keypoint> m_keypoints;
-    int render_priority = 0;
+    int m_render_priority = 0;
 };
 
 // -----------------------------------------------------------------------------

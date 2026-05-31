@@ -639,12 +639,12 @@ void ImageNode::Render(SDL_Renderer* renderer,
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
 
-void ImageNode::SetRenderPriority(int new_render_priority) {
-    render_priority = new_render_priority;
+void ImageNode::SetRenderPriority(int render_priority) {
+    m_render_priority = render_priority;
 }
 
 int ImageNode::getRenderPriority() const {
-    return render_priority;
+    return m_render_priority;
 }
 
 // =============================================================================
