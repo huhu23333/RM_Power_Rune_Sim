@@ -104,8 +104,13 @@ struct WorldVertex {
     float u, v;
 };
 
+struct TriIndices {
+    size_t i, j, k;
+};
+
 struct RenderFace {
     std::vector<WorldVertex> world_verts;
+    std::vector<TriIndices> world_verts_indices;
     SDL_Texture* texture = nullptr;
     SDL_FColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
@@ -114,7 +119,7 @@ const double SUBDIV_SCALE = 0.005;
 const int SUBDIV_MAXNUM = 64;
 
 // 工具函数
-void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
+void BuildFaceTriangles(RenderFace& face,
                         double cx, double cy, double cz,
                         double width, double height,
                         float uv_l, float uv_t,

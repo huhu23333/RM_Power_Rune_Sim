@@ -16,6 +16,13 @@ struct Point2D
     bool   valid = true; // 投影是否有效（false 表示在相机后方或超出视场角）
 };
 
+struct Point2DUVD
+{
+    Point2D point2d;
+    float u, v;
+    double distance;
+};
+
 // 三维空间中的三角面（三个顶点）
 struct Triangle3D
 {

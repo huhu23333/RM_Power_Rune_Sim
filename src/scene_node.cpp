@@ -331,7 +331,7 @@ Point3D SceneNode::ChildLocalToWorld(const Point3D& child_local, const SceneNode
 // 工具函数（保持不变）
 // =============================================================================
 
-void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
+void BuildFaceTriangles(RenderFace& face,
                         double cx, double cy, double cz,
                         double width, double height,
                         float uv_l, float uv_t,
@@ -342,32 +342,35 @@ void BuildFaceTriangles(std::vector<WorldVertex>& out_verts,
     int segs_h = std::max(1, std::min((int)std::ceil(height / SUBDIV_SCALE), SUBDIV_MAXNUM));
     double hw = width / 2.0, hh = height / 2.0;
 
-    out_verts.clear();
-    out_verts.reserve(segs_w * segs_h * 6);
+    face.world_verts.clear();
+    face.world_verts_indices.clear();
+    face.world_verts.reserve((segs_w + 1) * (segs_h + 1));
+    face.world_verts_indices.reserve(segs_w * segs_h * 2);
+
+    for (int gy = 0; gy < segs_h+1; ++gy) {
+        for (int gx = 0; gx < segs_w+1; ++gx) {
+            double txl = (double)gx / segs_w;
+            double tyb = (double)gy / segs_h;
+
+            double xl = cx - hw + txl * width;
+            double yb = cy - hh + tyb * height;
+
+            float ul = uv_l + (uv_r - uv_l) * (float)txl;
+            float vb = uv_t + (uv_b - uv_t) * (float)tyb;
+
+            face.world_verts.push_back({ { xl, yb, cz }, ul, vb });
+        }
+    }
 
     for (int gy = 0; gy < segs_h; ++gy) {
         for (int gx = 0; gx < segs_w; ++gx) {
-            double txl = (double)gx / segs_w;
-            double txr = (double)(gx + 1) / segs_w;
-            double tyb = (double)gy / segs_h;
-            double tyt = (double)(gy + 1) / segs_h;
+            size_t index_0 = gx + (segs_w+1) * gy;
+            size_t index_1 = gx + 1 + (segs_w+1) * gy;
+            size_t index_2 = gx + (segs_w+1) * (gy+1);
+            size_t index_3 = gx + 1 + (segs_w+1) * (gy+1);
 
-            double xl = cx - hw + txl * width;
-            double xr = cx - hw + txr * width;
-            double yb = cy - hh + tyb * height;
-            double yt = cy - hh + tyt * height;
-
-            float ul = uv_l + (uv_r - uv_l) * (float)txl;
-            float ur = uv_l + (uv_r - uv_l) * (float)txr;
-            float vb = uv_t + (uv_b - uv_t) * (float)tyb;
-            float vt = uv_t + (uv_b - uv_t) * (float)tyt;
-
-            out_verts.push_back({ { xl, yb, cz }, ul, vb });
-            out_verts.push_back({ { xr, yb, cz }, ur, vb });
-            out_verts.push_back({ { xr, yt, cz }, ur, vt });
-            out_verts.push_back({ { xl, yb, cz }, ul, vb });
-            out_verts.push_back({ { xr, yt, cz }, ur, vt });
-            out_verts.push_back({ { xl, yt, cz }, ul, vt });
+            face.world_verts_indices.push_back({index_0, index_1, index_3});
+            face.world_verts_indices.push_back({index_0, index_3, index_2});
         }
     }
 }
@@ -560,7 +563,7 @@ void ImageNode::UpdateFaces()
     double hh = m_display_height / 2.0;
 
     RenderFace face;
-    BuildFaceTriangles(face.world_verts,
+    BuildFaceTriangles(face,
                        0, 0, 0,
                        m_display_width, m_display_height,
                        m_offset_x, m_offset_y,
@@ -576,11 +579,7 @@ void ImageNode::Render(SDL_Renderer* renderer,
                         const Point3D& cam_pos,
                         double cam_yaw, double cam_pitch, double cam_roll)
 {
-    struct SortedFace {
-        const RenderFace* face;
-        std::vector<SDL_Vertex> sdl_verts;
-    };
-    SortedFace sorted_face;
+    std::vector<SDL_Vertex> sf_sdl_verts;
     const float MAX_COORD = 1e6f;
 
     // 预先计算世界 → 相机的旋转矩阵
@@ -591,28 +590,28 @@ void ImageNode::Render(SDL_Renderer* renderer,
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
     SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
 
-    SortedFace sf;
-    sf.face = &m_face;
-    sf.sdl_verts.reserve(m_face.world_verts.size());
-    double z_sum = 0.0;
-    int visible_tris = 0;
-
-    for (size_t i = 0; i < m_face.world_verts.size(); i += 3) {
+    sf_sdl_verts.reserve(m_face.world_verts_indices.size());
+    
+    std::vector<Point2DUVD> p2duv_verts;
+    for (size_t i = 0; i < m_face.world_verts.size(); i += 1) {
         const WorldVertex& wv0 = m_face.world_verts[i];
-        const WorldVertex& wv1 = m_face.world_verts[i + 1];
-        const WorldVertex& wv2 = m_face.world_verts[i + 2];
-
         Point3D r0 = LocalToWorld(wv0.pos);
-        Point3D r1 = LocalToWorld(wv1.pos);
-        Point3D r2 = LocalToWorld(wv2.pos);
-
         Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
-        Point3D c1 = WorldToCameraTransform(r1, cam_pos, cam_rot);
-        Point3D c2 = WorldToCameraTransform(r2, cam_pos, cam_rot);
-
         Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
-        Point2D pp1 = ProjectPoint(c1, intrinsics, distortion);
-        Point2D pp2 = ProjectPoint(c2, intrinsics, distortion);
+
+        p2duv_verts.push_back({pp0, wv0.u, wv0.v});
+    }
+
+    for (size_t i = 0; i < m_face.world_verts_indices.size(); i += 1) {
+        TriIndices indices = m_face.world_verts_indices[i];
+
+        Point2DUVD& pp0uv = p2duv_verts[indices.i];
+        Point2DUVD& pp1uv = p2duv_verts[indices.j];
+        Point2DUVD& pp2uv = p2duv_verts[indices.k];
+
+        Point2D& pp0 = pp0uv.point2d;
+        Point2D& pp1 = pp1uv.point2d;
+        Point2D& pp2 = pp2uv.point2d;
 
         if (!pp0.valid && !pp1.valid && !pp2.valid)
             continue;
@@ -628,15 +627,13 @@ void ImageNode::Render(SDL_Renderer* renderer,
         SDL_FColor face_color = m_face.color;
         face_color.a = m_alpha;
 
-        sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
-        sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
-        sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
-        z_sum += c0.z + c1.z + c2.z;
-        visible_tris += 3;
+        sf_sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { pp0uv.u, pp0uv.v } });
+        sf_sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { pp1uv.u, pp1uv.v } });
+        sf_sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { pp2uv.u, pp2uv.v } });
     }
 
-    SDL_RenderGeometry(renderer, sf.face->texture,
-                        sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
+    SDL_RenderGeometry(renderer, m_face.texture,
+                        sf_sdl_verts.data(), (int)sf_sdl_verts.size(),
                         nullptr, 0);
 
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
@@ -720,22 +717,27 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         int visible_tris = 0;
         sf.render_priority = img_node->getRenderPriority();
 
-        for (size_t i = 0; i < face.world_verts.size(); i += 3) {
+        std::vector<Point2DUVD> p2duv_verts;
+        for (size_t i = 0; i < face.world_verts.size(); i += 1) {
             const WorldVertex& wv0 = face.world_verts[i];
-            const WorldVertex& wv1 = face.world_verts[i + 1];
-            const WorldVertex& wv2 = face.world_verts[i + 2];
-
             Point3D r0 = img_node->LocalToWorld(wv0.pos);
-            Point3D r1 = img_node->LocalToWorld(wv1.pos);
-            Point3D r2 = img_node->LocalToWorld(wv2.pos);
-
             Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
-            Point3D c1 = WorldToCameraTransform(r1, cam_pos, cam_rot);
-            Point3D c2 = WorldToCameraTransform(r2, cam_pos, cam_rot);
-
             Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
-            Point2D pp1 = ProjectPoint(c1, intrinsics, distortion);
-            Point2D pp2 = ProjectPoint(c2, intrinsics, distortion);
+
+            double distance = std::sqrt(c0.x * c0.x + c0.y * c0.y + c0.z * c0.z);
+            p2duv_verts.push_back({pp0, wv0.u, wv0.v, distance});
+        }
+
+        for (size_t i = 0; i < face.world_verts_indices.size(); i += 1) {
+            TriIndices indices = face.world_verts_indices[i];
+
+            Point2DUVD& pp0uv = p2duv_verts[indices.i];
+            Point2DUVD& pp1uv = p2duv_verts[indices.j];
+            Point2DUVD& pp2uv = p2duv_verts[indices.k];
+
+            Point2D& pp0 = pp0uv.point2d;
+            Point2D& pp1 = pp1uv.point2d;
+            Point2D& pp2 = pp2uv.point2d;
 
             if (!pp0.valid && !pp1.valid && !pp2.valid)
                 continue;
@@ -751,16 +753,11 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             SDL_FColor face_color = face.color;
             face_color.a = img_node->GetAlpha();
 
-            sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { wv0.u, wv0.v } });
-            sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { wv1.u, wv1.v } });
-            sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { wv2.u, wv2.v } });
+            sf.sdl_verts.push_back({ { (float)pp0.x, (float)pp0.y }, face_color, { pp0uv.u, pp0uv.v } });
+            sf.sdl_verts.push_back({ { (float)pp1.x, (float)pp1.y }, face_color, { pp1uv.u, pp1uv.v } });
+            sf.sdl_verts.push_back({ { (float)pp2.x, (float)pp2.y }, face_color, { pp2uv.u, pp2uv.v } });
             
-            Point3D c_center = {
-                (c0.x + c1.x + c2.x) / 3.0,
-                (c0.y + c1.y + c2.y) / 3.0,
-                (c0.z + c1.z + c2.z) / 3.0
-            };
-            distance_sum += std::sqrt(c_center.x * c_center.x + c_center.y * c_center.y + c_center.z * c_center.z);
+            distance_sum += pp0uv.distance + pp1uv.distance + pp2uv.distance;
             visible_tris += 1;
         }
 
