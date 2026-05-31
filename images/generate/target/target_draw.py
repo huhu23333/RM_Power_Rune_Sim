@@ -146,16 +146,17 @@ def compute_keypoints(
     List[Tuple[float, float]],
 ]:
     """
-    计算所有49个关键点的像素坐标。
+    计算所有57个关键点的像素坐标。
 
     Returns
     -------
     all_points : List[Tuple[float, float]]
-        所有关键点列表，顺序：[center] + sector_corners + intersections
+        所有关键点列表，顺序：
+        [center] + sector_corners(16) + intersections(32) + extra_points1(4) + extra_points2(4)
     sector_corners : List[Tuple[float, float]]
         16个扇形角点
     intersections : List[Tuple[float, float]]
-        32个交点
+        32个径向x角向交点
     """
     cx = width / 2.0
     cy = height / 2.0
@@ -213,6 +214,25 @@ def compute_keypoints(
             px, py = polar_to_pixel(cx, cy, r, theta, scale)
             intersections.append((px, py))
             all_points.append((px, py))
+
+    # 4. 新增8个关键点 (indices 49-56)
+    # 4.1 水平线和竖直线与扇形外圆弧 (r=150) 的交点
+    sector_outer_r = 150.0
+    horizontal_vertical_angles = [0.0, np.pi/2, np.pi, 3*np.pi/2]
+    extra_points1 = []
+    for theta in horizontal_vertical_angles:
+        px, py = polar_to_pixel(cx, cy, sector_outer_r, theta, scale)
+        extra_points1.append((px, py))
+        all_points.append((px, py))
+
+    # 4.2 斜45°线与最外层圆环外边缘 (r=135) 的交点
+    outer_ring_outer_r = 135.0
+    diagonal_angles = [np.pi/4, 3*np.pi/4, 5*np.pi/4, 7*np.pi/4]
+    extra_points2 = []
+    for theta in diagonal_angles:
+        px, py = polar_to_pixel(cx, cy, outer_ring_outer_r, theta, scale)
+        extra_points2.append((px, py))
+        all_points.append((px, py))
 
     return all_points, sector_corners, intersections
 
@@ -331,13 +351,15 @@ def main():
 
     # ========== 计算关键点 ==========
     all_points, sector_corners, intersections = compute_keypoints(WIDTH, HEIGHT, SCALE)
-
+    
     # 验证关键点数量
-    assert len(all_points) == 49, f"关键点数量应为49，实际为{len(all_points)}"
+    assert len(all_points) == 57, f"关键点数量应为57，实际为{len(all_points)}"
     print(f"\n关键点总计: {len(all_points)}")
     print(f"  - 圆心: 1")
     print(f"  - 扇形角点: {len(sector_corners)}")
     print(f"  - 径向x角向交点: {len(intersections)}")
+    print(f"  - 新增(水平/竖直线与扇形外弧): 4")
+    print(f"  - 新增(斜45°线与最外圆环): 4")
 
     # ========== 输出关键点到文件 ==========
     txt_path = "target.txt"

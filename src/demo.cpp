@@ -83,6 +83,7 @@ int main(int argc, char* argv[])
 
     // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> target_keypoints = LoadKeypointsFromFile("images/results/target.txt");
+    std::vector<Keypoint> flowing_arrow_keypoints = LoadKeypointsFromFile("images/results/flowing_arrow.txt");
 
     // ---------- 3. 设置相机参数 ----------
     CameraIntrinsics intrinsics{
@@ -151,7 +152,7 @@ int main(int argc, char* argv[])
                                             0.06, 0.33,
                                             0.0, -0.1543-0.02-0.33/2.0, 0.0,
                                             1.0f,
-                                            {}, fan_node_group.fan_node, 1);
+                                            flowing_arrow_keypoints, fan_node_group.fan_node, 1);
     }
 
     // ---------- 5. 控制状态 ----------
@@ -370,15 +371,23 @@ int main(int argc, char* argv[])
         // ---- Step 4: 关键点渲染 ----
         if (show_keypoints) {
             for (auto& fan_node_group : fan_node_groups) {
-                auto* target_node = fan_node_group.target_node;
-
+                auto* keypoints_node = fan_node_group.target_node;
                 std::vector<KeypointProjection> projections;
-                ComputeKeypointProjections(*target_node, intrinsics, distortion,
+                std::vector<std::vector<ExtraTextureInfo>> all_textures;
+
+                keypoints_node = fan_node_group.target_node;
+                ComputeKeypointProjections(*keypoints_node, intrinsics, distortion,
                                         cam_pos, camera.yaw, camera.pitch, camera.roll,
                                         projections);
-                                        
-                std::vector<std::vector<ExtraTextureInfo>> all_textures;
-                target_node -> RenderKeypoints(renderer, intrinsics, distortion,
+                keypoints_node -> RenderKeypoints(renderer, intrinsics, distortion,
+                                               cam_pos, camera.yaw, camera.pitch, camera.roll,
+                                               all_textures, {0.0, 1.0, 1.0, 1.0});
+
+                keypoints_node = fan_node_group.flowing_arrow_node;
+                ComputeKeypointProjections(*keypoints_node, intrinsics, distortion,
+                                        cam_pos, camera.yaw, camera.pitch, camera.roll,
+                                        projections);
+                keypoints_node -> RenderKeypoints(renderer, intrinsics, distortion,
                                                cam_pos, camera.yaw, camera.pitch, camera.roll,
                                                all_textures, {0.0, 1.0, 1.0, 1.0});
             };
