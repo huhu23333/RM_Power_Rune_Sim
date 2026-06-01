@@ -23,6 +23,21 @@ void EulerToMatrix(double yaw, double pitch, double roll, double rot[3][3]);
 void MultiplyMatrix(const double a[3][3], const double b[3][3], double out[3][3]);
 void InverseRotationMatrix(const double r[3][3], double inv[3][3]);
 
+// 相机位姿（位置 + 欧拉角 Yaw/Pitch/Roll，顺序：Yaw → Pitch → Roll）
+struct CameraPose
+{
+    Point3D position{0.0, 0.0, 0.0};
+    double yaw{0.0};    // 绕 Y 轴旋转（弧度）
+    double pitch{0.0};  // 绕 X 轴旋转（弧度）
+    double roll{0.0};   // 绕 Z 轴旋转（弧度）
+
+    // 计算世界 → 相机的旋转矩阵（3x3）
+    void GetWorldToCameraMatrix(double rot[3][3]) const;
+
+    // 便捷函数：将世界点变换到相机坐标系
+    Point3D WorldToCamera(const Point3D& world_pt) const;
+};
+
 // -----------------------------------------------------------------------------
 // 附加纹理信息（用于关键点渲染时在外部管理的附加纹理）
 // -----------------------------------------------------------------------------
@@ -87,8 +102,7 @@ public:
     virtual void Render(SDL_Renderer* renderer,
                         const CameraIntrinsics& intrinsics,
                         const DistortionCoefficients& distortion,
-                        const Point3D& cam_pos,
-                        double cam_yaw, double cam_pitch, double cam_roll) {}
+                        const CameraPose& camera_pose) {}
 
 protected:
     SceneNode* m_parent = nullptr;
@@ -194,16 +208,14 @@ public:
     void RenderKeypoints(SDL_Renderer* renderer,
                           const CameraIntrinsics& intrinsics,
                           const DistortionCoefficients& distortion,
-                          const Point3D& cam_pos,
-                          double cam_yaw, double cam_pitch, double cam_roll,
+                          const CameraPose& camera_pose,
                           const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
                           SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f }) const;
 
     void Render(SDL_Renderer* renderer,
                 const CameraIntrinsics& intrinsics,
                 const DistortionCoefficients& distortion,
-                const Point3D& cam_pos,
-                double cam_yaw, double cam_pitch, double cam_roll) override;
+                const CameraPose& camera_pose) override;
     
     void SetRenderPriority(int render_priority);
     int getRenderPriority() const;
@@ -244,8 +256,7 @@ public:
     void RenderAll(SDL_Renderer* renderer,
                    const CameraIntrinsics& intrinsics,
                    const DistortionCoefficients& distortion,
-                   const Point3D& cam_pos,
-                   double cam_yaw, double cam_pitch, double cam_roll) const;
+                   const CameraPose& camera_pose) const;
 
     const std::vector<SceneNodePtr>& GetAllNodes() const;
 

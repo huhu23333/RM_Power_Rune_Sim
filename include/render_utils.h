@@ -120,16 +120,14 @@ struct KeypointProjection {
  * @param node         目标 ImageNode
  * @param intrinsics   相机内参
  * @param distortion   畸变系数
- * @param cam_pos      相机世界坐标
- * @param cam_yaw, cam_pitch, cam_roll  相机姿态（Yaw/Pitch/Roll）
+ * @param camera_pose  相机位姿
  * @param out_projections  输出的投影结果，顺序与 node.GetKeypoints() 一致
  */
 void ComputeKeypointProjections(
     const ImageNode& node,
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion,
-    const Point3D& cam_pos,
-    double cam_yaw, double cam_pitch, double cam_roll,
+    const CameraPose& camera_pose,
     std::vector<KeypointProjection>& out_projections);
 
 /**

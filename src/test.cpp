@@ -169,13 +169,10 @@ int main(int argc, char* argv[])
 
     // ---------- 5. 控制状态 ----------
     bool mouse_grabbed = false;
-    struct CameraPose {
-        double yaw{0.0};
-        double pitch{0.0};
-        double roll{0.0};
+    CameraPose camera_pose{
+        Point3D({0.0, 0.0, 0.0}),
+        0.0, 0.0, 0.0
     };
-    CameraPose camera{};
-    Point3D cam_pos{ 0.0, 0.0, 0.0 };
     float mouse_sensitivity = 0.002f;
     float move_speed = 2.0f;
 
@@ -266,7 +263,7 @@ int main(int argc, char* argv[])
                 case SDLK_LSHIFT: case SDLK_RSHIFT: key_down = true; break;
                 case SDLK_Q: key_q = true; break;
                 case SDLK_E: key_e = true; break;
-                case SDLK_R: camera.roll = 0.0; break;
+                case SDLK_R: camera_pose.roll = 0.0; break;
                 case SDLK_J: key_j = true; break;
                 case SDLK_L: key_l = true; break;
                 case SDLK_I: key_i = true; break;
@@ -325,11 +322,11 @@ int main(int argc, char* argv[])
 
             case SDL_EVENT_MOUSE_MOTION:
                 if (mouse_grabbed) {
-                    camera.yaw   += event.motion.xrel * mouse_sensitivity;
-                    camera.pitch -= event.motion.yrel * mouse_sensitivity;
+                    camera_pose.yaw   += event.motion.xrel * mouse_sensitivity;
+                    camera_pose.pitch -= event.motion.yrel * mouse_sensitivity;
                     const double pitch_limit = 1.5;
-                    if (camera.pitch >  pitch_limit) camera.pitch =  pitch_limit;
-                    if (camera.pitch < -pitch_limit) camera.pitch = -pitch_limit;
+                    if (camera_pose.pitch >  pitch_limit) camera_pose.pitch =  pitch_limit;
+                    if (camera_pose.pitch < -pitch_limit) camera_pose.pitch = -pitch_limit;
                 }
                 break;
 
@@ -339,20 +336,20 @@ int main(int argc, char* argv[])
         }
 
         // ---------- 摄像机移动 ----------
-        double wf_x = std::sin(camera.yaw);
-        double wf_z = std::cos(camera.yaw);
-        double wr_x = std::cos(camera.yaw);
-        double wr_z = -std::sin(camera.yaw);
+        double wf_x = std::sin(camera_pose.yaw);
+        double wf_z = std::cos(camera_pose.yaw);
+        double wr_x = std::cos(camera_pose.yaw);
+        double wr_z = -std::sin(camera_pose.yaw);
 
-        if (key_w) { cam_pos.x += wf_x * move_speed * dt; cam_pos.z += wf_z * move_speed * dt; }
-        if (key_s) { cam_pos.x -= wf_x * move_speed * dt; cam_pos.z -= wf_z * move_speed * dt; }
-        if (key_a) { cam_pos.x -= wr_x * move_speed * dt; cam_pos.z -= wr_z * move_speed * dt; }
-        if (key_d) { cam_pos.x += wr_x * move_speed * dt; cam_pos.z += wr_z * move_speed * dt; }
-        if (key_up)   cam_pos.y -= move_speed * dt;
-        if (key_down) cam_pos.y += move_speed * dt;
+        if (key_w) { camera_pose.position.x += wf_x * move_speed * dt; camera_pose.position.z += wf_z * move_speed * dt; }
+        if (key_s) { camera_pose.position.x -= wf_x * move_speed * dt; camera_pose.position.z -= wf_z * move_speed * dt; }
+        if (key_a) { camera_pose.position.x -= wr_x * move_speed * dt; camera_pose.position.z -= wr_z * move_speed * dt; }
+        if (key_d) { camera_pose.position.x += wr_x * move_speed * dt; camera_pose.position.z += wr_z * move_speed * dt; }
+        if (key_up)   camera_pose.position.y -= move_speed * dt;
+        if (key_down) camera_pose.position.y += move_speed * dt;
 
-        if (key_q) camera.roll += roll_speed * dt;
-        if (key_e) camera.roll -= roll_speed * dt;
+        if (key_q) camera_pose.roll += roll_speed * dt;
+        if (key_e) camera_pose.roll -= roll_speed * dt;
 
         // ---------- 图像旋转（N 键切换目标） ----------
         if (key_j) (rotate_target_mode ? target_yaw : back_yaw)   += obj_rot_speed * dt;
@@ -388,8 +385,7 @@ int main(int argc, char* argv[])
         BeginOffscreenRender(renderer, offscreen);
 
         // ---- Step 2: 渲染场景节点 ----
-        scene.RenderAll(renderer, intrinsics, distortion, cam_pos,
-                        camera.yaw, camera.pitch, camera.roll);
+        scene.RenderAll(renderer, intrinsics, distortion, camera_pose);
 
         SDL_FlushRenderer(renderer);
 
@@ -401,8 +397,7 @@ int main(int argc, char* argv[])
             // 预计算关键点投影
             std::vector<KeypointProjection> projections;
             ComputeKeypointProjections(*target_node, intrinsics, distortion,
-                                       cam_pos, camera.yaw, camera.pitch, camera.roll,
-                                       projections);
+                                       camera_pose, projections);
 
             // 构建所有附加纹理（传入投影数据）
             std::vector<std::vector<ExtraTextureInfo>> all_textures;
@@ -413,8 +408,7 @@ int main(int argc, char* argv[])
                                      cached_pix_texts, pix_textures);
 
             target_node->RenderKeypoints(renderer, intrinsics, distortion,
-                                         cam_pos, camera.yaw, camera.pitch, camera.roll,
-                                         all_textures);
+                                         camera_pose, all_textures);
         }
 
         // ---- Step 5: 截图 ----

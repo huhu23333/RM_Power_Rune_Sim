@@ -4,6 +4,53 @@
 #include <cstring>
 #include <sstream>
 
+void CameraPose::GetWorldToCameraMatrix(double rot[3][3]) const
+{
+    double cy = std::cos(yaw);
+    double sy = std::sin(yaw);
+    double cp = std::cos(pitch);
+    double sp = std::sin(pitch);
+    double cr = std::cos(roll);
+    double sr = std::sin(roll);
+
+    // Ry(yaw)  矩阵（绕 Y 轴）
+    double Ry[3][3] = {
+        { cy, 0.0, -sy },
+        { 0.0, 1.0, 0.0 },
+        { sy, 0.0,  cy }
+    };
+    // Rx(pitch) 矩阵（绕 X 轴）
+    double Rx[3][3] = {
+        { 1.0, 0.0, 0.0 },
+        { 0.0,  cp,  sp },
+        { 0.0, -sp,  cp }
+    };
+    // Rz(roll)  矩阵（绕 Z 轴）
+    double Rz[3][3] = {
+        { cr, -sr, 0.0 },
+        { sr,  cr, 0.0 },
+        { 0.0, 0.0, 1.0 }
+    };
+
+    double temp[3][3];
+    MultiplyMatrix(Rx, Ry, temp);    // Rx * Ry
+    MultiplyMatrix(Rz, temp, rot);   // Rz * (Rx * Ry)
+}
+
+Point3D CameraPose::WorldToCamera(const Point3D& world_pt) const
+{
+    double rot[3][3];
+    GetWorldToCameraMatrix(rot);
+    double dx = world_pt.x - position.x;
+    double dy = world_pt.y - position.y;
+    double dz = world_pt.z - position.z;
+    return Point3D{
+        rot[0][0] * dx + rot[0][1] * dy + rot[0][2] * dz,
+        rot[1][0] * dx + rot[1][1] * dy + rot[1][2] * dz,
+        rot[2][0] * dx + rot[2][1] * dy + rot[2][2] * dz
+    };
+}
+
 // =============================================================================
 // 辅助函数：根据欧拉角构建世界→相机旋转矩阵（顺序：Yaw -> Pitch -> Roll）
 // =============================================================================
@@ -514,8 +561,7 @@ Point3D ImageNode::GetKeypointWorldPos(size_t index) const
 void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
                                  const CameraIntrinsics& intrinsics,
                                  const DistortionCoefficients& distortion,
-                                 const Point3D& cam_pos,
-                                 double cam_yaw, double cam_pitch, double cam_roll,
+                                 const CameraPose& camera_pose,
                                  const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
                                  SDL_FColor kp_color_dot) const
 {
@@ -525,11 +571,11 @@ void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
 
     for (size_t ki = 0; ki < m_keypoints.size(); ++ki) {
         Point3D world_pt = GetKeypointWorldPos(ki);
-        Point3D cam_pt = WorldToCameraTransform(world_pt, cam_pos, cam_rot);
+        Point3D cam_pt = WorldToCameraTransform(world_pt, camera_pose.position, cam_rot);
         if (cam_pt.z <= 0.001) continue;
 
         Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
@@ -576,15 +622,14 @@ void ImageNode::UpdateFaces()
 void ImageNode::Render(SDL_Renderer* renderer,
                         const CameraIntrinsics& intrinsics,
                         const DistortionCoefficients& distortion,
-                        const Point3D& cam_pos,
-                        double cam_yaw, double cam_pitch, double cam_roll)
+                        const CameraPose& camera_pose)
 {
     std::vector<SDL_Vertex> sf_sdl_verts;
     const float MAX_COORD = 1e6f;
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
 
     SDL_TextureAddressMode prev_u, prev_v;
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
@@ -596,7 +641,7 @@ void ImageNode::Render(SDL_Renderer* renderer,
     for (size_t i = 0; i < m_face.world_verts.size(); i += 1) {
         const WorldVertex& wv0 = m_face.world_verts[i];
         Point3D r0 = LocalToWorld(wv0.pos);
-        Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
+        Point3D c0 = WorldToCameraTransform(r0, camera_pose.position, cam_rot);
         Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
 
         p2duv_verts.push_back({pp0, wv0.u, wv0.v});
@@ -684,8 +729,7 @@ void Scene::UpdateAllTransforms()
 void Scene::RenderAll(SDL_Renderer* renderer,
                        const CameraIntrinsics& intrinsics,
                        const DistortionCoefficients& distortion,
-                       const Point3D& cam_pos,
-                       double cam_yaw, double cam_pitch, double cam_roll) const
+                       const CameraPose& camera_pose) const
 {
     struct SortedTriangle {
         SDL_Texture* texture;
@@ -699,7 +743,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
 
     // 设置纹理地址模式（所有三角形共用，只需设置一次）
     SDL_TextureAddressMode prev_u, prev_v;
@@ -721,7 +765,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         for (size_t i = 0; i < face.world_verts.size(); ++i) {
             const WorldVertex& wv = face.world_verts[i];
             Point3D world_pt = img_node->LocalToWorld(wv.pos);
-            Point3D cam_pt = WorldToCameraTransform(world_pt, cam_pos, cam_rot);
+            Point3D cam_pt = WorldToCameraTransform(world_pt, camera_pose.position, cam_rot);
             Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
             double distance = std::sqrt(cam_pt.x * cam_pt.x + cam_pt.y * cam_pt.y + cam_pt.z * cam_pt.z);
             p2duv_verts.push_back({ screen_pt, wv.u, wv.v, distance });
@@ -789,8 +833,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 void Scene::RenderAll(SDL_Renderer* renderer,
                        const CameraIntrinsics& intrinsics,
                        const DistortionCoefficients& distortion,
-                       const Point3D& cam_pos,
-                       double cam_yaw, double cam_pitch, double cam_roll) const
+                       const CameraPose& camera_pose) const
 {
     struct SortedFace {
         const RenderFace* face;
@@ -804,7 +847,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
 
     SDL_TextureAddressMode prev_u, prev_v;
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
@@ -827,7 +870,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         for (size_t i = 0; i < face.world_verts.size(); i += 1) {
             const WorldVertex& wv0 = face.world_verts[i];
             Point3D r0 = img_node->LocalToWorld(wv0.pos);
-            Point3D c0 = WorldToCameraTransform(r0, cam_pos, cam_rot);
+            Point3D c0 = WorldToCameraTransform(r0, camera_pose.position, cam_rot);
             Point2D pp0 = ProjectPoint(c0, intrinsics, distortion);
 
             double distance = std::sqrt(c0.x * c0.x + c0.y * c0.y + c0.z * c0.z);

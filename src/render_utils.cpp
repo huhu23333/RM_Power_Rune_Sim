@@ -170,8 +170,7 @@ void ComputeKeypointProjections(
     const ImageNode& node,
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion,
-    const Point3D& cam_pos,
-    double cam_yaw, double cam_pitch, double cam_roll,
+    const CameraPose& camera_pose,
     std::vector<KeypointProjection>& out_projections)
 {
     const auto& keypoints = node.GetKeypoints();
@@ -182,12 +181,12 @@ void ComputeKeypointProjections(
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(cam_yaw, cam_pitch, cam_roll, cam_rot);
+    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
 
     for (size_t ki = 0; ki < keypoints.size(); ++ki) {
         KeypointProjection proj;
         proj.world_pt = node.GetKeypointWorldPos(ki);
-        proj.cam_pt = WorldToCameraTransform(proj.world_pt, cam_pos, cam_rot);
+        proj.cam_pt = WorldToCameraTransform(proj.world_pt, camera_pose.position, cam_rot);
 
         if (proj.cam_pt.z <= 0.001) {
             proj.valid = false;
