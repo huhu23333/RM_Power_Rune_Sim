@@ -18,7 +18,6 @@ const double SUBDIV_SCALE = 0.005;
 const int SUBDIV_MAXNUM = 16;
 #endif
 
-void ComputeWorldToCameraMatrix(double yaw, double pitch, double roll, double rot[3][3]);
 void EulerToMatrix(double yaw, double pitch, double roll, double rot[3][3]);
 void MultiplyMatrix(const double a[3][3], const double b[3][3], double out[3][3]);
 void InverseRotationMatrix(const double r[3][3], double inv[3][3]);
@@ -161,14 +160,13 @@ struct Keypoint
     double pixel_y;
 };
 
-struct TargetFaceInfo {
-    double center_x, center_y, center_z;
-    double half_width, half_height;
-    double width, height;
+// 关键点投影结果（世界坐标、相机坐标、屏幕像素坐标及有效性）
+struct KeypointProjection {
+    Point3D world_pt;   // 世界坐标
+    Point3D cam_pt;     // 相机坐标系坐标
+    Point2D screen_pt;  // 投影后的屏幕坐标（像素）
+    bool   valid;       // 是否在相机前方且投影有效
 };
-
-Point3D KeypointPixelToWorld(const Keypoint& kp, const TargetFaceInfo& face,
-                              int tex_w, int tex_h);
 
 // -----------------------------------------------------------------------------
 // 图像节点类
@@ -205,12 +203,13 @@ public:
     const std::vector<Keypoint>& GetKeypoints() const;
     Point3D GetKeypointWorldPos(size_t index) const;
 
-    void RenderKeypoints(SDL_Renderer* renderer,
-                          const CameraIntrinsics& intrinsics,
-                          const DistortionCoefficients& distortion,
-                          const CameraPose& camera_pose,
-                          const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
-                          SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f }) const;
+    void RenderKeypoints(
+        SDL_Renderer* renderer,
+        const CameraIntrinsics& intrinsics,
+        const DistortionCoefficients& distortion,
+        const std::vector<KeypointProjection>& projections,
+        const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
+        SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f }) const;
 
     void Render(SDL_Renderer* renderer,
                 const CameraIntrinsics& intrinsics,
@@ -219,6 +218,22 @@ public:
     
     void SetRenderPriority(int render_priority);
     int getRenderPriority() const;
+
+
+    /**
+     * @brief 计算一个 ImageNode 中所有关键点的投影数据
+     *
+     * @param node         目标 ImageNode
+     * @param intrinsics   相机内参
+     * @param distortion   畸变系数
+     * @param camera_pose  相机位姿
+     * @param out_projections  输出的投影结果，顺序与 node.GetKeypoints() 一致
+     */
+    void ComputeKeypointProjections(
+        const CameraIntrinsics& intrinsics,
+        const DistortionCoefficients& distortion,
+        const CameraPose& camera_pose,
+        std::vector<KeypointProjection>& out_projections);
 
 protected:
     void UpdateFaces();

@@ -396,7 +396,7 @@ int main(int argc, char* argv[])
         if (show_keypoints && !keypoints.empty() && target_node) {
             // 预计算关键点投影
             std::vector<KeypointProjection> projections;
-            ComputeKeypointProjections(*target_node, intrinsics, distortion,
+            target_node -> ComputeKeypointProjections(intrinsics, distortion,
                                        camera_pose, projections);
 
             // 构建所有附加纹理（传入投影数据）
@@ -408,7 +408,7 @@ int main(int argc, char* argv[])
                                      cached_pix_texts, pix_textures);
 
             target_node->RenderKeypoints(renderer, intrinsics, distortion,
-                                         camera_pose, all_textures);
+                                         projections, all_textures);
         }
 
         // ---- Step 5: 截图 ----

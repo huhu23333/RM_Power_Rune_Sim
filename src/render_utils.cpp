@@ -166,46 +166,6 @@ void PresentOffscreenToWindow(SDL_Renderer* renderer, SDL_Texture* offscreen,
     SDL_RenderPresent(renderer);
 }
 
-void ComputeKeypointProjections(
-    const ImageNode& node,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion,
-    const CameraPose& camera_pose,
-    std::vector<KeypointProjection>& out_projections)
-{
-    const auto& keypoints = node.GetKeypoints();
-    out_projections.clear();
-    out_projections.reserve(keypoints.size());
-
-    const float MAX_COORD = 1e6f;
-
-    // 预先计算世界 → 相机的旋转矩阵
-    double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
-
-    for (size_t ki = 0; ki < keypoints.size(); ++ki) {
-        KeypointProjection proj;
-        proj.world_pt = node.GetKeypointWorldPos(ki);
-        proj.cam_pt = WorldToCameraTransform(proj.world_pt, camera_pose.position, cam_rot);
-
-        if (proj.cam_pt.z <= 0.001) {
-            proj.valid = false;
-            out_projections.push_back(proj);
-            continue;
-        }
-
-        proj.screen_pt = ProjectPoint(proj.cam_pt, intrinsics, distortion);
-        if (std::isnan(proj.screen_pt.x) || std::isnan(proj.screen_pt.y) ||
-            std::abs(proj.screen_pt.x) > MAX_COORD ||
-            std::abs(proj.screen_pt.y) > MAX_COORD) {
-            proj.valid = false;
-        } else {
-            proj.valid = true;
-        }
-        out_projections.push_back(proj);
-    }
-}
-
 // =============================================================================
 // 关键点所有附加纹理构建（含序号 + 坐标标签，已合并）
 // =============================================================================

@@ -545,16 +545,16 @@ int main(int argc, char* argv[])
                 std::vector<std::vector<ExtraTextureInfo>> all_textures;
 
                 keypoints_node = fan_node_group.target_node;
-                ComputeKeypointProjections(*keypoints_node, intrinsics, distortion,
+                keypoints_node -> ComputeKeypointProjections(intrinsics, distortion,
                                         camera_pose, projections);
                 keypoints_node -> RenderKeypoints(renderer, intrinsics, distortion,
-                                        camera_pose, all_textures, {0.0, 1.0, 1.0, 1.0});
+                                        projections, all_textures, {0.0, 1.0, 1.0, 1.0});
 
                 keypoints_node = fan_node_group.flowing_arrow_node;
-                ComputeKeypointProjections(*keypoints_node, intrinsics, distortion,
+                keypoints_node -> ComputeKeypointProjections(intrinsics, distortion,
                                         camera_pose, projections);
                 keypoints_node -> RenderKeypoints(renderer, intrinsics, distortion,
-                                        camera_pose, all_textures, {0.0, 1.0, 1.0, 1.0});
+                                        projections, all_textures, {0.0, 1.0, 1.0, 1.0});
             };
         }
 

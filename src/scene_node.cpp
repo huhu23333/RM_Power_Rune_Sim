@@ -52,44 +52,6 @@ Point3D CameraPose::WorldToCamera(const Point3D& world_pt) const
 }
 
 // =============================================================================
-// 辅助函数：根据欧拉角构建世界→相机旋转矩阵（顺序：Yaw -> Pitch -> Roll）
-// =============================================================================
-void ComputeWorldToCameraMatrix(double yaw, double pitch, double roll, double rot[3][3])
-{
-    double cy = std::cos(yaw);
-    double sy = std::sin(yaw);
-    double cp = std::cos(pitch);
-    double sp = std::sin(pitch);
-    double cr = std::cos(roll);
-    double sr = std::sin(roll);
-
-    // Ry(yaw)  矩阵（绕 Y 轴）
-    double Ry[3][3] = {
-        { cy, 0.0, -sy },
-        { 0.0, 1.0, 0.0 },
-        { sy, 0.0,  cy }
-    };
-    // Rx(pitch) 矩阵（绕 X 轴）
-    double Rx[3][3] = {
-        { 1.0, 0.0, 0.0 },
-        { 0.0,  cp,  sp },
-        { 0.0, -sp,  cp }
-    };
-    // Rz(roll)  矩阵（绕 Z 轴）
-    double Rz[3][3] = {
-        { cr, -sr, 0.0 },
-        { sr,  cr, 0.0 },
-        { 0.0, 0.0, 1.0 }
-    };
-
-    double temp[3][3];
-    // 计算 Rx * Ry
-    MultiplyMatrix(Rx, Ry, temp);
-    // 计算 Rz * (Rx * Ry) = Rz * Rx * Ry
-    MultiplyMatrix(Rz, temp, rot);
-}
-
-// =============================================================================
 // 辅助函数：欧拉角 → 旋转矩阵（ZYX 顺序，与 ToParent 一致）
 // =============================================================================
 void EulerToMatrix(double yaw, double pitch, double roll, double rot[3][3])
@@ -455,17 +417,6 @@ void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, 
     SDL_RenderGeometry(renderer, nullptr, verts.data(), (int)verts.size(), nullptr, 0);
 }
 
-Point3D KeypointPixelToWorld(const Keypoint& kp, const TargetFaceInfo& face,
-                              int tex_w, int tex_h)
-{
-    double u = kp.pixel_x / tex_w;
-    double v = kp.pixel_y / tex_h;
-    double wx = face.center_x - face.half_width  + u * face.width;
-    double wy = face.center_y - face.half_height + v * face.height;
-    double wz = face.center_z;
-    return { wx, wy, wz };
-}
-
 // =============================================================================
 // ImageNode
 // =============================================================================
@@ -558,35 +509,63 @@ Point3D ImageNode::GetKeypointWorldPos(size_t index) const
     return LocalToWorld(local_pt);
 }
 
-void ImageNode::RenderKeypoints(SDL_Renderer* renderer,
-                                 const CameraIntrinsics& intrinsics,
-                                 const DistortionCoefficients& distortion,
-                                 const CameraPose& camera_pose,
-                                 const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
-                                 SDL_FColor kp_color_dot) const
+void ImageNode::ComputeKeypointProjections(
+    const CameraIntrinsics& intrinsics,
+    const DistortionCoefficients& distortion,
+    const CameraPose& camera_pose,
+    std::vector<KeypointProjection>& out_projections)
 {
-    if (m_keypoints.empty()) return;
+    const auto& keypoints = GetKeypoints();
+    out_projections.clear();
+    out_projections.reserve(keypoints.size());
 
     const float MAX_COORD = 1e6f;
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
+    camera_pose.GetWorldToCameraMatrix(cam_rot);
 
-    for (size_t ki = 0; ki < m_keypoints.size(); ++ki) {
-        Point3D world_pt = GetKeypointWorldPos(ki);
-        Point3D cam_pt = WorldToCameraTransform(world_pt, camera_pose.position, cam_rot);
-        if (cam_pt.z <= 0.001) continue;
+    for (size_t ki = 0; ki < keypoints.size(); ++ki) {
+        KeypointProjection proj;
+        proj.world_pt = GetKeypointWorldPos(ki);
+        proj.cam_pt = WorldToCameraTransform(proj.world_pt, camera_pose.position, cam_rot);
 
-        Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
-        if (std::isnan(screen_pt.x) || std::isnan(screen_pt.y) || 
-            std::abs(screen_pt.x) > MAX_COORD || std::abs(screen_pt.y) > MAX_COORD || 
-            !screen_pt.valid)
+        if (proj.cam_pt.z <= 0.001) {
+            proj.valid = false;
+            out_projections.push_back(proj);
+            continue;
+        }
+
+        proj.screen_pt = ProjectPoint(proj.cam_pt, intrinsics, distortion);
+        if (std::isnan(proj.screen_pt.x) || std::isnan(proj.screen_pt.y) ||
+            std::abs(proj.screen_pt.x) > MAX_COORD ||
+            std::abs(proj.screen_pt.y) > MAX_COORD) {
+            proj.valid = false;
+        } else {
+            proj.valid = true;
+        }
+        out_projections.push_back(proj);
+    }
+}
+
+void ImageNode::RenderKeypoints(
+    SDL_Renderer* renderer,
+    const CameraIntrinsics& intrinsics,
+    const DistortionCoefficients& distortion,
+    const std::vector<KeypointProjection>& projections,
+    const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
+    SDL_FColor kp_color_dot) const
+{
+    const float MAX_COORD = 1e6f;
+    for (size_t ki = 0; ki < projections.size(); ++ki) {
+        const auto& proj = projections[ki];
+        if (!proj.valid) continue;
+        if (std::isnan(proj.screen_pt.x) || std::isnan(proj.screen_pt.y) ||
+            std::abs(proj.screen_pt.x) > MAX_COORD || std::abs(proj.screen_pt.y) > MAX_COORD)
             continue;
 
-        float sx = (float)screen_pt.x;
-        float sy = (float)screen_pt.y;
-
+        float sx = (float)proj.screen_pt.x;
+        float sy = (float)proj.screen_pt.y;
         DrawFilledCircle(renderer, sx, sy, 10.0f, kp_color_dot);
 
         if (ki < all_extra_textures.size()) {
@@ -629,7 +608,7 @@ void ImageNode::Render(SDL_Renderer* renderer,
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
+    camera_pose.GetWorldToCameraMatrix(cam_rot);
 
     SDL_TextureAddressMode prev_u, prev_v;
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
@@ -743,7 +722,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
+    camera_pose.GetWorldToCameraMatrix(cam_rot);
 
     // 设置纹理地址模式（所有三角形共用，只需设置一次）
     SDL_TextureAddressMode prev_u, prev_v;
@@ -847,7 +826,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
-    ComputeWorldToCameraMatrix(camera_pose.yaw, camera_pose.pitch, camera_pose.roll, cam_rot);
+    camera_pose.GetWorldToCameraMatrix(cam_rot);
 
     SDL_TextureAddressMode prev_u, prev_v;
     SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);

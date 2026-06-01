@@ -106,30 +106,6 @@ void PresentOffscreenToWindow(SDL_Renderer* renderer, SDL_Texture* offscreen,
 // 关键点附加纹理管理（外部缓存）
 // -----------------------------------------------------------------------------
 
-// 关键点投影结果（世界坐标、相机坐标、屏幕像素坐标及有效性）
-struct KeypointProjection {
-    Point3D world_pt;   // 世界坐标
-    Point3D cam_pt;     // 相机坐标系坐标
-    Point2D screen_pt;  // 投影后的屏幕坐标（像素）
-    bool   valid;       // 是否在相机前方且投影有效
-};
-
-/**
- * @brief 计算一个 ImageNode 中所有关键点的投影数据
- *
- * @param node         目标 ImageNode
- * @param intrinsics   相机内参
- * @param distortion   畸变系数
- * @param camera_pose  相机位姿
- * @param out_projections  输出的投影结果，顺序与 node.GetKeypoints() 一致
- */
-void ComputeKeypointProjections(
-    const ImageNode& node,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion,
-    const CameraPose& camera_pose,
-    std::vector<KeypointProjection>& out_projections);
-
 /**
  * @brief 构建关键点所有附加纹理（含序号 + 坐标标签），已合并可直接传入 RenderKeypoints
  *
