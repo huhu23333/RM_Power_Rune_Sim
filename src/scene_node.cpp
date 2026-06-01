@@ -576,15 +576,57 @@ void ImageNode::UpdateFaces()
 {
     if (!m_texture) return;
 
-    double hw = m_display_width / 2.0;
-    double hh = m_display_height / 2.0;
+    // 完整显示矩形的半宽半高（局部坐标）
+    double full_hw = m_display_width / 2.0;
+    double full_hh = m_display_height / 2.0;
+
+    // 是否启用裁剪（范围不是完整 [0,1]）
+    bool use_clip = (m_clip_min_x != 0.0 || m_clip_max_x != 1.0 ||
+                     m_clip_min_y != 0.0 || m_clip_max_y != 1.0);
+
+    double center_x = 0.0, center_y = 0.0;
+    double width = m_display_width;
+    double height = m_display_height;
+    float uv_left   = m_offset_x;
+    float uv_top    = m_offset_y;
+    float uv_right  = m_offset_x + 1.0f;
+    float uv_bottom = m_offset_y + 1.0f;
+
+    if (use_clip) {
+        // 计算裁剪后矩形的局部坐标边界
+        double left   = -full_hw + m_clip_min_x * m_display_width;
+        double right  = -full_hw + m_clip_max_x * m_display_width;
+        double bottom = -full_hh + m_clip_min_y * m_display_height;
+        double top    = -full_hh + m_clip_max_y * m_display_height;
+
+        width  = right - left;
+        height = top - bottom;
+        // 新矩形的中心（局部坐标）
+        center_x = (left + right) / 2.0;
+        center_y = (bottom + top) / 2.0;
+
+        // 对应的纹理坐标范围
+        uv_left   = m_offset_x + (float)m_clip_min_x;
+        uv_right  = m_offset_x + (float)m_clip_max_x;
+        uv_top    = m_offset_y + (float)m_clip_min_y;
+        uv_bottom = m_offset_y + (float)m_clip_max_y;
+    }
+
+    // 若宽度或高度为 0，不生成任何三角形（完全透明）
+    if (width <= 0.0 || height <= 0.0) {
+        m_face.world_verts.clear();
+        m_face.world_verts_indices.clear();
+        m_face.texture = m_texture;
+        m_face.color = { 1.0f, 1.0f, 1.0f, m_alpha };
+        return;
+    }
 
     RenderFace face;
     BuildFaceTriangles(face,
-                       0, 0, 0,
-                       m_display_width, m_display_height,
-                       m_offset_x, m_offset_y,
-                       m_offset_x + 1.0f, m_offset_y + 1.0f);
+                       center_x, center_y, 0.0,   // 使用计算出的中心位置
+                       width, height,
+                       uv_left, uv_top,
+                       uv_right, uv_bottom);
     face.texture = m_texture;
     face.color = { 1.0f, 1.0f, 1.0f, m_alpha };
     m_face = std::move(face);
@@ -652,6 +694,38 @@ void ImageNode::SetRenderPriority(int render_priority) {
 
 int ImageNode::getRenderPriority() const {
     return m_render_priority;
+}
+
+void ImageNode::SetDisplayClip(double min_x, double max_x, double min_y, double max_y)
+{
+    // 钳位到 [0,1]
+    min_x = std::clamp(min_x, 0.0, 1.0);
+    max_x = std::clamp(max_x, 0.0, 1.0);
+    min_y = std::clamp(min_y, 0.0, 1.0);
+    max_y = std::clamp(max_y, 0.0, 1.0);
+
+    // 无效范围或全范围时恢复默认
+    if (min_x >= max_x || min_y >= max_y ||
+        (min_x == 0.0 && max_x == 1.0 && min_y == 0.0 && max_y == 1.0)) {
+        m_clip_min_x = 0.0;
+        m_clip_max_x = 1.0;
+        m_clip_min_y = 0.0;
+        m_clip_max_y = 1.0;
+    } else {
+        m_clip_min_x = min_x;
+        m_clip_max_x = max_x;
+        m_clip_min_y = min_y;
+        m_clip_max_y = max_y;
+    }
+    UpdateFaces();
+}
+
+void ImageNode::GetDisplayClip(double& min_x, double& max_x, double& min_y, double& max_y) const
+{
+    min_x = m_clip_min_x;
+    max_x = m_clip_max_x;
+    min_y = m_clip_min_y;
+    max_y = m_clip_max_y;
 }
 
 // =============================================================================

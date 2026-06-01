@@ -402,7 +402,7 @@ int main(int argc, char* argv[])
                     break;
                 case SDLK_C:
                     if (event.key.repeat == 0) {
-                        if (show_light_type == 3) {
+                        if (show_light_type == 8) {
                             show_light_type = 0;
                         } else {
                             show_light_type += 1;
@@ -464,6 +464,7 @@ int main(int argc, char* argv[])
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                     fan_node_group.target_node -> SetAlpha(0.0);
                     fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
                 break;
             case 1:
@@ -472,6 +473,7 @@ int main(int argc, char* argv[])
                     fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
                     fan_node_group.target_node -> SetAlpha(1.0);
                     fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
                 break;
             case 2:
@@ -480,16 +482,33 @@ int main(int argc, char* argv[])
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                     fan_node_group.target_node -> SetAlpha(0.0);
                     fan_node_group.fan_small_activating -> SetAlpha(1.0);
+                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
                 break;
             case 3:
+            case 4:
+            case 5:
+            case 6:
+            case 7:
+                {
+                    double show_fan_light_ratio = (double)(show_light_type - 2) / 5.0;
+                    for (auto& fan_node_group : front_fan_node_groups) {
+                        fan_node_group.fan_light_node -> SetAlpha(1.0);
+                        fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                        fan_node_group.target_node -> SetAlpha(0.0);
+                        fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                        fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 1.0-0.480/0.7455*show_fan_light_ratio, 1.0);
+                    }
+                }
+                break;
+            case 8:
                 for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(1.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                     fan_node_group.target_node -> SetAlpha(0.0);
                     fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
-                break;
             
             default:
                 break;

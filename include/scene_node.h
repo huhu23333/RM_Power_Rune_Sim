@@ -235,6 +235,13 @@ public:
         const CameraPose& camera_pose,
         std::vector<KeypointProjection>& out_projections);
 
+    // 设置显示裁剪矩形（比例值，相对于节点的局部坐标范围）
+    // 参数范围 [0, 1]，且 min < max。例如 (0.2f, 0.8f, 0.2f, 0.8f) 表示只显示中央 60% 区域。
+    // 传入 (0,1,0,1) 可恢复全范围显示。
+    void SetDisplayClip(double min_x, double max_x, double min_y, double max_y);
+    // 获取当前裁剪矩形
+    void GetDisplayClip(double& min_x, double& max_x, double& min_y, double& max_y) const;
+
 protected:
     void UpdateFaces();
 
@@ -251,6 +258,11 @@ private:
     RenderFace m_face;
     std::vector<Keypoint> m_keypoints;
     int m_render_priority = 0;
+    
+    double m_clip_min_x = 0.0;
+    double m_clip_max_x = 1.0;
+    double m_clip_min_y = 0.0;
+    double m_clip_max_y = 1.0;
 };
 
 // -----------------------------------------------------------------------------
