@@ -20,6 +20,7 @@ struct fan_node_group_t {
     ImageNode* fan_light_node;
     ImageNode* target_node;
     ImageNode* flowing_arrow_node;
+    ImageNode* fan_small_activating;
 
     SceneNode* sketchy_baffle_node;
     SceneNode* sketchy_baffle_oblique_node;
@@ -93,6 +94,9 @@ int main(int argc, char* argv[])
 
     TextureInfo triangle_tex_info = LoadTextureFromPNG(renderer, "images/results/triangle.png");
     SDL_Log("triangle texture size: %dx%d", triangle_tex_info.width, triangle_tex_info.height);
+
+    TextureInfo fan_small_activating_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_small_activating.png");
+    SDL_Log("fan_small_activating texture size: %dx%d", fan_small_activating_tex_info.width, fan_small_activating_tex_info.height);
 
     // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> target_keypoints = LoadKeypointsFromFile("images/results/target.txt");
@@ -170,6 +174,13 @@ int main(int argc, char* argv[])
                                             0.0, -0.1543-0.02-0.33/2.0, 0.0,
                                             1.0f,
                                             flowing_arrow_keypoints, fan_node_group.fan_node, 1);
+
+        fan_node_group.fan_small_activating = CreateImageNode(scene,
+                                            fan_small_activating_tex_info.texture, fan_small_activating_tex_info.width, fan_small_activating_tex_info.height,
+                                            0.4171, 0.7455,
+                                            0.0, -0.1543-0.7455/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 1);
 
         // 挡板节点
 
@@ -260,6 +271,8 @@ int main(int argc, char* argv[])
         fan_node_group.target_node = nullptr;
         
         fan_node_group.flowing_arrow_node = nullptr;
+
+        fan_node_group.fan_small_activating = nullptr;
 
         // 挡板节点
 
@@ -392,7 +405,7 @@ int main(int argc, char* argv[])
                     break;
                 case SDLK_C:
                     if (event.key.repeat == 0) {
-                        if (show_light_type == 2) {
+                        if (show_light_type == 3) {
                             show_light_type = 0;
                         } else {
                             show_light_type += 1;
@@ -452,18 +465,32 @@ int main(int argc, char* argv[])
                 for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
                 }
                 break;
             case 1:
                 for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
+                    fan_node_group.target_node -> SetAlpha(1.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
                 }
                 break;
             case 2:
                 for (auto& fan_node_group : front_fan_node_groups) {
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(1.0);
+                }
+                break;
+            case 3:
+                for (auto& fan_node_group : front_fan_node_groups) {
                     fan_node_group.fan_light_node -> SetAlpha(1.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
                 }
                 break;
             
