@@ -145,15 +145,15 @@ int main(int argc, char* argv[])
 
         fan_node_group.fan_background_node = CreateImageNode(scene,
                                             fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
-                                            0.4151, 0.7419,
-                                            0.0, -0.1543-0.7419/2.0, 0.0,
+                                            0.4171, 0.7455,
+                                            0.0, -0.1543-0.7455/2.0, 0.0,
                                             1.0f,
                                             {}, fan_node_group.fan_node, 0);
 
         fan_node_group.fan_light_node = CreateImageNode(scene,
                                             fan_light_tex_info.texture, fan_light_tex_info.width, fan_light_tex_info.height,
-                                            0.4151, 0.7419,
-                                            0.0, -0.1543-0.7419/2.0, 0.0,
+                                            0.4171, 0.7455,
+                                            0.0, -0.1543-0.7455/2.0, 0.0,
                                             1.0f,
                                             {}, fan_node_group.fan_node, 1);
 
@@ -250,8 +250,8 @@ int main(int argc, char* argv[])
 
         fan_node_group.fan_background_node = CreateImageNode(scene,
                                             fan_background_tex_info.texture, fan_background_tex_info.width, fan_background_tex_info.height,
-                                            0.4151, 0.7419,
-                                            0.0, -0.1543-0.7419/2.0, 0.0,
+                                            0.4171, 0.7455,
+                                            0.0, -0.1543-0.7455/2.0, 0.0,
                                             1.0f,
                                             {}, fan_node_group.fan_node, 0);
 
@@ -291,13 +291,13 @@ int main(int argc, char* argv[])
 
     // 背景节点
 
-    // TextureInfo test_tex_info = LoadTextureFromPNG(renderer, "images/results/test.png");
-    // ImageNode* front_node = CreateImageNode(scene,
-    //                 test_tex_info.texture, test_tex_info.width, test_tex_info.height,
-    //                 2560.0 * 5e-3, 1440.0 * 5e-3,
-    //                 0.0, 0.0, 5,
-    //                 1.0f,
-    //                 {}, nullptr, -1);
+    TextureInfo test_tex_info = LoadTextureFromPNG(renderer, "images/results/test.png");
+    ImageNode* front_node = CreateImageNode(scene,
+                    test_tex_info.texture, test_tex_info.width, test_tex_info.height,
+                    2560.0 * 5e-3, 1440.0 * 5e-3,
+                    0.0, 0.0, 5,
+                    1.0f,
+                    {}, nullptr, -1);
 
 
     // ---------- 5. 控制状态 ----------
