@@ -29,12 +29,6 @@ struct Triangle3D
     Point3D v0, v1, v2;
 };
 
-// 投影到二维屏幕后的三角面
-struct Triangle2D
-{
-    Point2D v0, v1, v2;
-};
-
 // 相机内参矩阵参数
 //     [ fx  0  cx ]
 // K = [  0  fy cy ]
@@ -96,32 +90,6 @@ std::pair<double, double> ComputeMaxHalfFovAngle(
  */
 Point2D ProjectPoint(
     const Point3D& point,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion = DistortionCoefficients{});
-
-/**
- * @brief 将三维三角面投影到二维屏幕
- *
- * @param triangle      相机坐标系下的三维三角面
- * @param intrinsics    相机内参
- * @param distortion    畸变系数
- * @return Triangle2D   投影后的二维屏幕三角面
- */
-Triangle2D ProjectTriangle(
-    const Triangle3D& triangle,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion = DistortionCoefficients{});
-
-/**
- * @brief 将多个三维三角面批量投影到二维屏幕
- *
- * @param triangles     相机坐标系下的三维三角面列表
- * @param intrinsics    相机内参
- * @param distortion    畸变系数
- * @return std::vector<Triangle2D> 投影后的二维屏幕三角面列表
- */
-std::vector<Triangle2D> ProjectTriangles(
-    const std::vector<Triangle3D>& triangles,
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion = DistortionCoefficients{});
 

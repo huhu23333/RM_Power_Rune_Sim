@@ -445,9 +445,18 @@ static Point2D ToPixelCoordinates(
     double y_dist,
     const CameraIntrinsics& intrinsics)
 {
+    const float MAX_COORD = 1e6f;
+
     Point2D pixel;
     pixel.x = intrinsics.fx * x_dist + intrinsics.cx;
     pixel.y = intrinsics.fy * y_dist + intrinsics.cy;
+
+    if (std::isnan(pixel.x) || std::isnan(pixel.y) ||
+        std::abs(pixel.x) > MAX_COORD ||
+        std::abs(pixel.y) > MAX_COORD) {
+            pixel.valid = false;
+    }
+
     return pixel;
 }
 
@@ -456,9 +465,11 @@ Point2D ProjectPoint(
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion)
 {
+    const float MAX_COORD = 1e6f;
+
     double x_norm = 0.0, y_norm = 0.0;
     bool valid = true;
-
+    
     if (point.z > 0.0) {
         // 点在相机前方：正常投影
         NormalizedProjection(point, x_norm, y_norm);
@@ -485,33 +496,7 @@ Point2D ProjectPoint(
     ApplyDistortion(x_norm, y_norm, distortion, x_dist, y_dist);
 
     Point2D result = ToPixelCoordinates(x_dist, y_dist, intrinsics);
-    result.valid = valid;
-    return result;
-}
-
-Triangle2D ProjectTriangle(
-    const Triangle3D& triangle,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion)
-{
-    Triangle2D result;
-    result.v0 = ProjectPoint(triangle.v0, intrinsics, distortion);
-    result.v1 = ProjectPoint(triangle.v1, intrinsics, distortion);
-    result.v2 = ProjectPoint(triangle.v2, intrinsics, distortion);
-    return result;
-}
-
-std::vector<Triangle2D> ProjectTriangles(
-    const std::vector<Triangle3D>& triangles,
-    const CameraIntrinsics& intrinsics,
-    const DistortionCoefficients& distortion)
-{
-    std::vector<Triangle2D> result;
-    result.reserve(triangles.size());
-
-    for (const auto& tri : triangles) {
-        result.push_back(ProjectTriangle(tri, intrinsics, distortion));
-    }
-
+    
+    result.valid = valid && result.valid;
     return result;
 }

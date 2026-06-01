@@ -519,8 +519,6 @@ void ImageNode::ComputeKeypointProjections(
     out_projections.clear();
     out_projections.reserve(keypoints.size());
 
-    const float MAX_COORD = 1e6f;
-
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
     camera_pose.GetWorldToCameraMatrix(cam_rot);
@@ -537,9 +535,7 @@ void ImageNode::ComputeKeypointProjections(
         }
 
         proj.screen_pt = ProjectPoint(proj.cam_pt, intrinsics, distortion);
-        if (std::isnan(proj.screen_pt.x) || std::isnan(proj.screen_pt.y) ||
-            std::abs(proj.screen_pt.x) > MAX_COORD ||
-            std::abs(proj.screen_pt.y) > MAX_COORD) {
+        if (!proj.screen_pt.valid) {
             proj.valid = false;
         } else {
             proj.valid = true;
@@ -556,13 +552,9 @@ void ImageNode::RenderKeypoints(
     const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
     SDL_FColor kp_color_dot) const
 {
-    const float MAX_COORD = 1e6f;
     for (size_t ki = 0; ki < projections.size(); ++ki) {
         const auto& proj = projections[ki];
         if (!proj.valid) continue;
-        if (std::isnan(proj.screen_pt.x) || std::isnan(proj.screen_pt.y) ||
-            std::abs(proj.screen_pt.x) > MAX_COORD || std::abs(proj.screen_pt.y) > MAX_COORD)
-            continue;
 
         float sx = (float)proj.screen_pt.x;
         float sy = (float)proj.screen_pt.y;
@@ -604,7 +596,6 @@ void ImageNode::Render(SDL_Renderer* renderer,
                         const CameraPose& camera_pose)
 {
     std::vector<SDL_Vertex> sf_sdl_verts;
-    const float MAX_COORD = 1e6f;
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
@@ -638,14 +629,6 @@ void ImageNode::Render(SDL_Renderer* renderer,
         Point2D& pp2 = pp2uv.point2d;
 
         if (!pp0.valid && !pp1.valid && !pp2.valid)
-            continue;
-        if (std::isnan(pp0.x) || std::isnan(pp0.y) ||
-            std::isnan(pp1.x) || std::isnan(pp1.y) ||
-            std::isnan(pp2.x) || std::isnan(pp2.y))
-            continue;
-        if (std::abs(pp0.x) > MAX_COORD || std::abs(pp0.y) > MAX_COORD ||
-            std::abs(pp1.x) > MAX_COORD || std::abs(pp1.y) > MAX_COORD ||
-            std::abs(pp2.x) > MAX_COORD || std::abs(pp2.y) > MAX_COORD)
             continue;
 
         SDL_FColor face_color = m_face.color;
@@ -718,8 +701,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
     };
     std::vector<SortedTriangle> sorted_triangles;
 
-    const float MAX_COORD = 1e6f;
-
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
     camera_pose.GetWorldToCameraMatrix(cam_rot);
@@ -759,15 +740,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
 
             // 跳过完全无效的三角形
             if (!p0.point2d.valid && !p1.point2d.valid && !p2.point2d.valid)
-                continue;
-            // 跳过包含 NaN 或超大坐标的三角形
-            if (std::isnan(p0.point2d.x) || std::isnan(p0.point2d.y) ||
-                std::isnan(p1.point2d.x) || std::isnan(p1.point2d.y) ||
-                std::isnan(p2.point2d.x) || std::isnan(p2.point2d.y))
-                continue;
-            if (std::abs(p0.point2d.x) > MAX_COORD || std::abs(p0.point2d.y) > MAX_COORD ||
-                std::abs(p1.point2d.x) > MAX_COORD || std::abs(p1.point2d.y) > MAX_COORD ||
-                std::abs(p2.point2d.x) > MAX_COORD || std::abs(p2.point2d.y) > MAX_COORD)
                 continue;
 
             // 三角形中心距离：三个顶点距离的平均值
@@ -822,7 +794,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         int render_priority;
     };
     std::vector<SortedFace> sorted_faces;
-    const float MAX_COORD = 1e6f;
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
@@ -868,14 +839,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             Point2D& pp2 = pp2uv.point2d;
 
             if (!pp0.valid && !pp1.valid && !pp2.valid)
-                continue;
-            if (std::isnan(pp0.x) || std::isnan(pp0.y) ||
-                std::isnan(pp1.x) || std::isnan(pp1.y) ||
-                std::isnan(pp2.x) || std::isnan(pp2.y))
-                continue;
-            if (std::abs(pp0.x) > MAX_COORD || std::abs(pp0.y) > MAX_COORD ||
-                std::abs(pp1.x) > MAX_COORD || std::abs(pp1.y) > MAX_COORD ||
-                std::abs(pp2.x) > MAX_COORD || std::abs(pp2.y) > MAX_COORD)
                 continue;
 
             SDL_FColor face_color = face.color;
