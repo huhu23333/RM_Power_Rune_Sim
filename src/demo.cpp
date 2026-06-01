@@ -179,7 +179,7 @@ int main(int argc, char* argv[])
 
         fan_node_group.sketchy_baffle_front_node = CreateImageNode(scene,
                                             rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
-                                            0.0646, 0.3512,
+                                            0.0675, 0.3512,
                                             0.0, -0.3093/2.0, -0.1664/2.0,
                                             1.0f,
                                             {}, fan_node_group.sketchy_baffle_oblique_node, 2);
@@ -188,7 +188,7 @@ int main(int argc, char* argv[])
         fan_node_group.sketchy_baffle_left_side_node = CreateImageNode(scene,
                                             triangle_tex_info.texture, triangle_tex_info.width, triangle_tex_info.height,
                                             0.3093, 0.1664,
-                                            -0.0646/2.0, -0.3093/2.0, -0.1664/2.0,
+                                            -0.0675/2.0, -0.3093/2.0, -0.1664/2.0,
                                             1.0f,
                                             {}, fan_node_group.sketchy_baffle_oblique_node, 2);
         fan_node_group.sketchy_baffle_left_side_node -> SetLocalRotation(M_PI/2.0, 0.0, M_PI/2.0);
@@ -196,14 +196,14 @@ int main(int argc, char* argv[])
         fan_node_group.sketchy_baffle_right_side_node = CreateImageNode(scene,
                                             triangle_tex_info.texture, triangle_tex_info.width, triangle_tex_info.height,
                                             0.3093, 0.1664,
-                                            0.0646/2.0, -0.3093/2.0, -0.1664/2.0,
+                                            0.0675/2.0, -0.3093/2.0, -0.1664/2.0,
                                             1.0f,
                                             {}, fan_node_group.sketchy_baffle_oblique_node, 2);
         fan_node_group.sketchy_baffle_right_side_node -> SetLocalRotation(M_PI/2.0, 0.0, M_PI/2.0);
 
         fan_node_group.sketchy_baffle_behind_node = CreateImageNode(scene,
                                             rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
-                                            0.136, 0.1543,
+                                            0.145, 0.1543,
                                             0.0, -0.1543/2.0, 0.0,
                                             1.0f,
                                             {}, fan_node_group.sketchy_baffle_node, 2);
@@ -269,7 +269,7 @@ int main(int argc, char* argv[])
 
         fan_node_group.sketchy_baffle_front_node = CreateImageNode(scene,
                                             rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
-                                            0.0646, 0.3512,
+                                            0.0675, 0.3512,
                                             0.0, -0.3093/2.0+(0.3512-0.3093)/2.0, 0.0,
                                             1.0f,
                                             {}, fan_node_group.sketchy_baffle_oblique_node, 0);
@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
 
         fan_node_group.sketchy_baffle_behind_node = CreateImageNode(scene,
                                             rectangle_tex_info.texture, rectangle_tex_info.width, rectangle_tex_info.height,
-                                            0.136, 0.1543,
+                                            0.145, 0.1543,
                                             0.0, -0.1543/2.0, 0.0,
                                             1.0f,
                                             {}, fan_node_group.sketchy_baffle_node, 0);
@@ -291,13 +291,13 @@ int main(int argc, char* argv[])
 
     // 背景节点
 
-    TextureInfo test_tex_info = LoadTextureFromPNG(renderer, "images/results/test.png");
-    ImageNode* front_node = CreateImageNode(scene,
-                    test_tex_info.texture, test_tex_info.width, test_tex_info.height,
-                    2560.0 * 5e-3, 1440.0 * 5e-3,
-                    0.0, 0.0, 5,
-                    1.0f,
-                    {}, nullptr, -1);
+    // TextureInfo test_tex_info = LoadTextureFromPNG(renderer, "images/results/test.png");
+    // ImageNode* front_node = CreateImageNode(scene,
+    //                 test_tex_info.texture, test_tex_info.width, test_tex_info.height,
+    //                 2560.0 * 5e-3, 1440.0 * 5e-3,
+    //                 0.0, 0.0, 5,
+    //                 1.0f,
+    //                 {}, nullptr, -1);
 
 
     // ---------- 5. 控制状态 ----------
