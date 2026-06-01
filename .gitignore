@@ -2,3 +2,5 @@ build/
 .vscode/
 .continue/
 screenshot/*.png
+*.png~
+*.kra~
