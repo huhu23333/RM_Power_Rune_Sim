@@ -516,7 +516,8 @@ void ImageNode::ComputeKeypointProjections(
     std::vector<KeypointProjection>& out_projections)
 {
     const auto& keypoints = GetKeypoints();
-    out_projections.reserve(out_projections.size() + keypoints.size());
+    out_projections.clear();
+    out_projections.reserve(keypoints.size());
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];

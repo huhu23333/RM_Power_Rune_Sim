@@ -363,11 +363,12 @@ int main(int argc, char* argv[])
                 keypoints_node = fan_node_group.target_node;
                 keypoints_node -> ComputeKeypointProjections(intrinsics, distortion,
                                         camera_pose, projections);
+                RenderKeypoints(renderer, intrinsics, distortion,
+                                projections, all_textures, {0.0, 1.0, 1.0, 1.0});
 
                 keypoints_node = fan_node_group.flowing_arrow_node;
                 keypoints_node -> ComputeKeypointProjections(intrinsics, distortion,
                                         camera_pose, projections);
-                                        
                 RenderKeypoints(renderer, intrinsics, distortion,
                                 projections, all_textures, {0.0, 1.0, 1.0, 1.0});
             };
