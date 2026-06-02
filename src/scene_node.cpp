@@ -516,8 +516,7 @@ void ImageNode::ComputeKeypointProjections(
     std::vector<KeypointProjection>& out_projections)
 {
     const auto& keypoints = GetKeypoints();
-    out_projections.clear();
-    out_projections.reserve(keypoints.size());
+    out_projections.reserve(out_projections.size() + keypoints.size());
 
     // 预先计算世界 → 相机的旋转矩阵
     double cam_rot[3][3];
@@ -544,13 +543,13 @@ void ImageNode::ComputeKeypointProjections(
     }
 }
 
-void ImageNode::RenderKeypoints(
+void RenderKeypoints(
     SDL_Renderer* renderer,
     const CameraIntrinsics& intrinsics,
     const DistortionCoefficients& distortion,
     const std::vector<KeypointProjection>& projections,
     const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
-    SDL_FColor kp_color_dot) const
+    SDL_FColor kp_color_dot)
 {
     for (size_t ki = 0; ki < projections.size(); ++ki) {
         const auto& proj = projections[ki];

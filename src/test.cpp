@@ -407,8 +407,8 @@ int main(int argc, char* argv[])
                                      cached_cam_texts, cam_textures,
                                      cached_pix_texts, pix_textures);
 
-            target_node->RenderKeypoints(renderer, intrinsics, distortion,
-                                         projections, all_textures);
+            RenderKeypoints(renderer, intrinsics, distortion,
+                            projections, all_textures);
         }
 
         // ---- Step 5: 截图 ----

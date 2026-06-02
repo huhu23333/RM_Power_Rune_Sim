@@ -138,18 +138,6 @@ struct RenderFace {
     SDL_FColor color = { 1.0f, 1.0f, 1.0f, 1.0f };
 };
 
-// 工具函数
-void BuildFaceTriangles(RenderFace& face,
-                        double cx, double cy, double cz,
-                        double width, double height,
-                        float uv_l, float uv_t,
-                        float uv_r, float uv_b);
-
-Point3D WorldToCameraTransform(const Point3D& world_pt, const Point3D& cam_pos,
-                               const double cam_rot[3][3]);
-
-void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, SDL_FColor color);
-
 // -----------------------------------------------------------------------------
 // 关键点
 // -----------------------------------------------------------------------------
@@ -167,6 +155,27 @@ struct KeypointProjection {
     Point2D screen_pt;  // 投影后的屏幕坐标（像素）
     bool   valid;       // 是否在相机前方且投影有效
 };
+
+
+// 工具函数
+void BuildFaceTriangles(RenderFace& face,
+                        double cx, double cy, double cz,
+                        double width, double height,
+                        float uv_l, float uv_t,
+                        float uv_r, float uv_b);
+
+Point3D WorldToCameraTransform(const Point3D& world_pt, const Point3D& cam_pos,
+                               const double cam_rot[3][3]);
+
+void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, SDL_FColor color);
+
+void RenderKeypoints(
+    SDL_Renderer* renderer,
+    const CameraIntrinsics& intrinsics,
+    const DistortionCoefficients& distortion,
+    const std::vector<KeypointProjection>& projections,
+    const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
+    SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f });
 
 // -----------------------------------------------------------------------------
 // 图像节点类
@@ -202,14 +211,6 @@ public:
     void SetKeypoints(const std::vector<Keypoint>& kps);
     const std::vector<Keypoint>& GetKeypoints() const;
     Point3D GetKeypointWorldPos(size_t index) const;
-
-    void RenderKeypoints(
-        SDL_Renderer* renderer,
-        const CameraIntrinsics& intrinsics,
-        const DistortionCoefficients& distortion,
-        const std::vector<KeypointProjection>& projections,
-        const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
-        SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f }) const;
 
     void Render(SDL_Renderer* renderer,
                 const CameraIntrinsics& intrinsics,
