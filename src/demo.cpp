@@ -80,9 +80,6 @@ int main(int argc, char* argv[])
     Scene scene;
 
     std::unique_ptr<PowerRune> power_rune = std::make_unique<PowerRune>(renderer, scene);
-    auto& front_fan_rotation_center_node = power_rune -> front_fan_rotation_center_node;
-    auto& behind_fan_rotation_center_node = power_rune -> behind_fan_rotation_center_node;
-    auto& front_fan_node_groups = power_rune -> front_fan_node_groups;
     
     // 背景节点
 
@@ -115,6 +112,9 @@ int main(int argc, char* argv[])
 
     double rune_roll_speed = 1.5;
     double rune_roll_rad = 0.0;
+
+    double flowing_arrow_speed = 1.0;
+    double flowing_arrow_offset = 0.0;
 
     // ---------- 6. 主循环 ----------
     SDL_Event event{};
@@ -233,59 +233,16 @@ int main(int argc, char* argv[])
 
         // ---------- 节点位置变换 ----------
         rune_roll_rad += rune_roll_speed * dt;
-        front_fan_rotation_center_node -> SetLocalRotation(0.0, 0.0, rune_roll_rad);
-        behind_fan_rotation_center_node -> SetLocalRotation(M_PI, 0.0, -rune_roll_rad);
+        power_rune -> SetRotateAngle(rune_roll_rad);
 
         // ---------- 图像更新 ----------
         switch (show_light_type)
         {
             case 0:
-                for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-                    fan_node_group.target_node -> SetAlpha(0.0);
-                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                    fan_node_group.fan_light_node -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                }
-                break;
             case 1:
-                for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
-                    fan_node_group.target_node -> SetAlpha(1.0);
-                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                    fan_node_group.fan_light_node -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                }
-                break;
             case 2:
-                for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-                    fan_node_group.target_node -> SetAlpha(0.0);
-                    fan_node_group.fan_small_activating -> SetAlpha(1.0);
-                    fan_node_group.fan_light_node -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                }
-                break;
             case 3:
-                for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-                    fan_node_group.target_node -> SetAlpha(0.0);
-                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                    fan_node_group.fan_light_node -> SetAlpha(1.0);
-                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
-                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                }
+                power_rune -> SetFanState(0, show_light_type);
                 break;
             case 4:
             case 5:
@@ -294,16 +251,8 @@ int main(int argc, char* argv[])
             case 8:
                 {
                     double show_fan_light_ratio = (double)(show_light_type - 3) / 5.0;
-                    for (auto& fan_node_group : front_fan_node_groups) {
-                        fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-                        fan_node_group.target_node -> SetAlpha(0.0);
-                        fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                        fan_node_group.fan_light_node -> SetAlpha(0.0);
-                        fan_node_group.fan_big_activating_inner -> SetAlpha(1.0);
-                        fan_node_group.fan_big_activating_outer -> SetAlpha(1.0);
-                        fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 1.0-(1.0-0.528)*show_fan_light_ratio, 1.0);
-                        fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 1.0-(1.0-0.483)*show_fan_light_ratio, 1.0);
-                    }
+                    power_rune -> SetFanState(0, 4);
+                    power_rune -> SetFanBigActivatingRatio(0, show_fan_light_ratio, show_fan_light_ratio);
                 }
                 break;
             
@@ -311,12 +260,9 @@ int main(int argc, char* argv[])
                 break;
         }
         
-        for (auto& fan_node_group : front_fan_node_groups) {
-            fan_node_group.flowing_arrow_node -> SetTextureOffset(
-                0.0,
-                fan_node_group.flowing_arrow_node -> GetTextureOffsetY() + dt * 1.0
-            );
-        }
+        flowing_arrow_offset += dt * flowing_arrow_speed;
+        flowing_arrow_offset = flowing_arrow_offset - std::floor(flowing_arrow_offset);
+        power_rune -> SetFlowingArrowOffset(0, flowing_arrow_offset);
 
         // ---------- 摄像机移动 ----------
         double wf_x = std::sin(camera_pose.yaw);
@@ -355,20 +301,10 @@ int main(int argc, char* argv[])
 
         // ---- Step 4: 关键点渲染 ----
         if (show_keypoints) {
-            for (auto& fan_node_group : front_fan_node_groups) {
-                auto* keypoints_node = fan_node_group.target_node;
-                std::vector<KeypointProjection> projections;
+            std::vector<std::pair<int, std::vector<KeypointProjection>>> keypoints 
+                = power_rune -> getShownKeypoints(intrinsics, distortion, camera_pose);
+            for (auto& [type, projections] : keypoints) {
                 std::vector<std::vector<ExtraTextureInfo>> all_textures;
-
-                keypoints_node = fan_node_group.target_node;
-                keypoints_node -> ComputeKeypointProjections(intrinsics, distortion,
-                                        camera_pose, projections);
-                RenderKeypoints(renderer, intrinsics, distortion,
-                                projections, all_textures, {0.0, 1.0, 1.0, 1.0});
-
-                keypoints_node = fan_node_group.flowing_arrow_node;
-                keypoints_node -> ComputeKeypointProjections(intrinsics, distortion,
-                                        camera_pose, projections);
                 RenderKeypoints(renderer, intrinsics, distortion,
                                 projections, all_textures, {0.0, 1.0, 1.0, 1.0});
             };

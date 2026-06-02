@@ -19,10 +19,10 @@ struct fan_node_group_t {
 
     SceneNode* sketchy_baffle_node;
     SceneNode* sketchy_baffle_oblique_node;
-    SceneNode* sketchy_baffle_front_node;
-    SceneNode* sketchy_baffle_left_side_node;
-    SceneNode* sketchy_baffle_right_side_node;
-    SceneNode* sketchy_baffle_behind_node;
+    ImageNode* sketchy_baffle_front_node;
+    ImageNode* sketchy_baffle_left_side_node;
+    ImageNode* sketchy_baffle_right_side_node;
+    ImageNode* sketchy_baffle_behind_node;
 };
 
 class PowerRune {
@@ -49,6 +49,8 @@ public:
     ImageNode* sketchy_support_vertical_right_node;
     SceneNode* behind_fan_rotation_center_node;
     std::vector<fan_node_group_t> behind_fan_node_groups;
+
+    std::vector<std::pair<int, ImageNode*>> image_nodes;
 
     PowerRune(SDL_Renderer* renderer, Scene& scene) {
         // ---------- 加载纹理 ----------
@@ -218,6 +220,21 @@ public:
                                                 1.0f,
                                                 {}, fan_node_group.sketchy_baffle_node, 0);
         }
+
+        // 将可能有关键点的图像节点统一收集
+        image_nodes.push_back({0, front_center_R_node});
+        for (auto& fan_node_group : front_fan_node_groups) {
+            image_nodes.push_back({0, fan_node_group.fan_light_node});
+            image_nodes.push_back({0, fan_node_group.target_node});
+            image_nodes.push_back({0, fan_node_group.flowing_arrow_node});
+            image_nodes.push_back({0, fan_node_group.fan_small_activating});
+            image_nodes.push_back({0, fan_node_group.fan_big_activating_inner});
+            image_nodes.push_back({0, fan_node_group.fan_big_activating_outer});
+        }
+
+        for (int i = 0; i < 5; i += 1) {
+            SetFanState(i, 0);
+        }
     }
 
     ~PowerRune() {
@@ -231,5 +248,101 @@ public:
         if (fan_small_activating_tex_info.texture) SDL_DestroyTexture(fan_small_activating_tex_info.texture);
         if (fan_big_activating_inner_tex_info.texture) SDL_DestroyTexture(fan_big_activating_inner_tex_info.texture);
         if (fan_big_activating_outer_tex_info.texture) SDL_DestroyTexture(fan_big_activating_outer_tex_info.texture);
+    }
+
+    void SetRotateAngle(double rad) {
+        front_fan_rotation_center_node -> SetLocalRotation(0.0, 0.0, rad);
+        behind_fan_rotation_center_node -> SetLocalRotation(M_PI, 0.0, -rad);
+    }
+
+    void SetFanState(size_t index, int state) {
+        switch (state)
+        {
+            case 0:
+                {
+                    auto& fan_node_group = front_fan_node_groups[index];
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                }
+                break;
+            case 1:
+                {
+                    auto& fan_node_group = front_fan_node_groups[index];
+                    fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
+                    fan_node_group.target_node -> SetAlpha(1.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                }
+                break;
+            case 2:
+                {
+                    auto& fan_node_group = front_fan_node_groups[index];
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(1.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                }
+                break;
+            case 3:
+                {
+                    auto& fan_node_group = front_fan_node_groups[index];
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetAlpha(1.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                }
+                break;
+            case 4:
+                {
+                    auto& fan_node_group = front_fan_node_groups[index];
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(1.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(1.0);
+                }
+                break;
+            
+            default:
+                break;
+        }
+    }
+
+    void SetFanBigActivatingRatio(size_t index, double inner_ratio, double outer_ratio) {
+        auto& fan_node_group = front_fan_node_groups[index];
+        fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 1.0-(1.0-0.528)*inner_ratio, 1.0);
+        fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 1.0-(1.0-0.483)*outer_ratio, 1.0);
+    }
+
+    void SetFlowingArrowOffset(size_t index, float offset) {
+        auto& fan_node_group = front_fan_node_groups[index];
+        fan_node_group.flowing_arrow_node -> SetTextureOffset(0.0, offset);
+    }
+
+    std::vector<std::pair<int, std::vector<KeypointProjection>>> getShownKeypoints(
+        CameraIntrinsics& intrinsics, DistortionCoefficients& distortion,
+        CameraPose& camera_pose
+    ) {
+        std::vector<std::pair<int, std::vector<KeypointProjection>>> result;
+        for (auto& [type, image_node] : image_nodes) {
+            if (image_node -> GetAlpha() != 0.0f) {
+                std::vector<KeypointProjection> projections;
+                image_node -> ComputeKeypointProjections(intrinsics, distortion,
+                                                         camera_pose, projections);
+                result.push_back({type, projections});
+            }
+        }
+        return result;
     }
 };
