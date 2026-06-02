@@ -704,13 +704,12 @@ void ImageNode::SetDisplayClip(double min_x, double max_x, double min_y, double 
     min_y = std::clamp(min_y, 0.0, 1.0);
     max_y = std::clamp(max_y, 0.0, 1.0);
 
-    // 无效范围或全范围时恢复默认
-    if (min_x >= max_x || min_y >= max_y ||
-        (min_x == 0.0 && max_x == 1.0 && min_y == 0.0 && max_y == 1.0)) {
+    // 无效范围时不显示
+    if (min_x >= max_x || min_y >= max_y) {
         m_clip_min_x = 0.0;
-        m_clip_max_x = 1.0;
+        m_clip_max_x = 0.0;
         m_clip_min_y = 0.0;
-        m_clip_max_y = 1.0;
+        m_clip_max_y = 0.0;
     } else {
         m_clip_min_x = min_x;
         m_clip_max_x = max_x;

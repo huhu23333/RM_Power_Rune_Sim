@@ -21,6 +21,8 @@ struct fan_node_group_t {
     ImageNode* target_node;
     ImageNode* flowing_arrow_node;
     ImageNode* fan_small_activating;
+    ImageNode* fan_big_activating_inner;
+    ImageNode* fan_big_activating_outer;
 
     SceneNode* sketchy_baffle_node;
     SceneNode* sketchy_baffle_oblique_node;
@@ -97,6 +99,12 @@ int main(int argc, char* argv[])
 
     TextureInfo fan_small_activating_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_small_activating.png");
     SDL_Log("fan_small_activating texture size: %dx%d", fan_small_activating_tex_info.width, fan_small_activating_tex_info.height);
+
+    TextureInfo fan_big_activating_inner_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_big_activating_inner.png");
+    SDL_Log("fan_big_activating_inner texture size: %dx%d", fan_big_activating_inner_tex_info.width, fan_big_activating_inner_tex_info.height);
+
+    TextureInfo fan_big_activating_outer_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_big_activating_outer.png");
+    SDL_Log("fan_big_activating_outer texture size: %dx%d", fan_big_activating_outer_tex_info.width, fan_big_activating_outer_tex_info.height);
 
     // ---------- 2b. 读取关键点文件 ----------
     std::vector<Keypoint> target_keypoints = LoadKeypointsFromFile("images/results/target.txt");
@@ -177,6 +185,20 @@ int main(int argc, char* argv[])
 
         fan_node_group.fan_small_activating = CreateImageNode(scene,
                                             fan_small_activating_tex_info.texture, fan_small_activating_tex_info.width, fan_small_activating_tex_info.height,
+                                            0.4171, 0.7455,
+                                            0.0, -0.1543-0.7455/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 1);
+
+        fan_node_group.fan_big_activating_inner = CreateImageNode(scene,
+                                            fan_big_activating_inner_tex_info.texture, fan_big_activating_inner_tex_info.width, fan_big_activating_inner_tex_info.height,
+                                            0.4171, 0.7455,
+                                            0.0, -0.1543-0.7455/2.0, 0.0,
+                                            1.0f,
+                                            {}, fan_node_group.fan_node, 1);
+
+        fan_node_group.fan_big_activating_outer = CreateImageNode(scene,
+                                            fan_big_activating_outer_tex_info.texture, fan_big_activating_outer_tex_info.width, fan_big_activating_outer_tex_info.height,
                                             0.4171, 0.7455,
                                             0.0, -0.1543-0.7455/2.0, 0.0,
                                             1.0f,
@@ -273,6 +295,10 @@ int main(int argc, char* argv[])
         fan_node_group.flowing_arrow_node = nullptr;
 
         fan_node_group.fan_small_activating = nullptr;
+
+        fan_node_group.fan_big_activating_inner = nullptr;
+
+        fan_node_group.fan_big_activating_outer = nullptr;
 
         // 挡板节点
 
@@ -460,55 +486,71 @@ int main(int argc, char* argv[])
         {
             case 0:
                 for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                     fan_node_group.target_node -> SetAlpha(0.0);
                     fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
                 break;
             case 1:
                 for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(1.0);
                     fan_node_group.target_node -> SetAlpha(1.0);
                     fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
                 break;
             case 2:
                 for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.fan_light_node -> SetAlpha(0.0);
                     fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                     fan_node_group.target_node -> SetAlpha(0.0);
                     fan_node_group.fan_small_activating -> SetAlpha(1.0);
-                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_light_node -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
                 }
                 break;
             case 3:
+                for (auto& fan_node_group : front_fan_node_groups) {
+                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
+                    fan_node_group.target_node -> SetAlpha(0.0);
+                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
+                    fan_node_group.fan_light_node -> SetAlpha(1.0);
+                    fan_node_group.fan_big_activating_inner -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_outer -> SetAlpha(0.0);
+                    fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                    fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
+                }
+                break;
             case 4:
             case 5:
             case 6:
             case 7:
+            case 8:
                 {
-                    double show_fan_light_ratio = (double)(show_light_type - 2) / 5.0;
+                    double show_fan_light_ratio = (double)(show_light_type - 3) / 5.0;
                     for (auto& fan_node_group : front_fan_node_groups) {
-                        fan_node_group.fan_light_node -> SetAlpha(1.0);
                         fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
                         fan_node_group.target_node -> SetAlpha(0.0);
                         fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                        fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 1.0-0.480/0.7455*show_fan_light_ratio, 1.0);
+                        fan_node_group.fan_light_node -> SetAlpha(0.0);
+                        fan_node_group.fan_big_activating_inner -> SetAlpha(1.0);
+                        fan_node_group.fan_big_activating_outer -> SetAlpha(1.0);
+                        fan_node_group.fan_big_activating_inner -> SetDisplayClip(0.0, 1.0, 1.0-(1.0-0.528)*show_fan_light_ratio, 1.0);
+                        fan_node_group.fan_big_activating_outer -> SetDisplayClip(0.0, 1.0, 1.0-(1.0-0.483)*show_fan_light_ratio, 1.0);
                     }
                 }
                 break;
-            case 8:
-                for (auto& fan_node_group : front_fan_node_groups) {
-                    fan_node_group.fan_light_node -> SetAlpha(1.0);
-                    fan_node_group.flowing_arrow_node -> SetAlpha(0.0);
-                    fan_node_group.target_node -> SetAlpha(0.0);
-                    fan_node_group.fan_small_activating -> SetAlpha(0.0);
-                    fan_node_group.fan_light_node -> SetDisplayClip(0.0, 1.0, 0.0, 1.0);
-                }
             
             default:
                 break;
