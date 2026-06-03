@@ -3,6 +3,7 @@
 
 import os
 from ultralytics import YOLO
+import torch
 
 def train():
     # 数据集配置文件路径（生成脚本输出的 dataset.yaml）
@@ -18,7 +19,7 @@ def train():
         epochs=100,
         imgsz=640,
         batch=16,
-        device='cpu',                # GPU ID，若用 CPU 设为 'cpu'
+        device=0 if torch.cuda.is_available() else "cpu",                # GPU ID，若用 CPU 设为 'cpu'
         workers=8,
         patience=50,
         save=True,
