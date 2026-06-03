@@ -4,9 +4,11 @@
 import math
 import random
 import numpy as np
+import os
 from typing import Tuple, List, Optional
 from power_rune_client import PowerRuneRenderer
 from image_process import sim_glow_and_color, sgac_params
+import cv2
 
 # ------------------------------------------------------------
 # 辅助函数：随机生成相机位姿（满足距离和角度约束）
@@ -149,6 +151,65 @@ def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
 
-def sample_background():
-    
-    
+class BackgroundSampler:
+    def __init__(self, target_size = (1280, 1024), backgrounds_path=None):
+        if not backgrounds_path:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            root_dir = os.path.dirname(script_dir)
+            backgrounds_path = os.path.join(root_dir, "background_images")
+        
+        self.image_paths = []
+        for file_name in os.listdir(backgrounds_path):
+            if file_name.split(".")[-1] in ["jpg", "png"]:
+                self.image_paths.append(os.path.join(backgrounds_path, file_name))
+
+        self.image_num = len(self.image_paths)
+        self.has_images = (self.image_num > 0)
+        self.target_size = target_size
+
+    def sample_background(self):
+        if self.has_images:
+            image_index = random.randint(0, self.image_num-1)
+            image = cv2.imread(self.image_paths[image_index])
+            image = cv2.resize(image, self.target_size).astype(np.float32)
+            image *= random.random()
+        else:
+            image = np.zeros((self.target_size[1], self.target_size[0], 3), dtype=np.uint8)
+        
+        noise = np.transpose(np.stack([
+            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0,32),
+            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0,32),
+            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0,32)
+            ]), (1,2,0))
+        noise += np.random.normal(
+            np.zeros_like(image),
+            np.ones_like(image, dtype=np.float32) * random.random() * 32
+        )
+        noise = np.clip(noise, 0, 255).astype(np.uint8)
+        result = cv2.add(image.astype(np.uint8), noise)
+        return result
+
+def blend_with_background(rgba: np.ndarray, bg: np.ndarray) -> np.ndarray:
+    """
+    将 RGBA 图像与指定颜色的 BGR 背景进行 alpha 混合。
+    返回 BGR 格式的图像（适合 OpenCV 显示）。
+    """
+    if rgba.shape[2] != 4:
+        raise ValueError("Input image must be RGBA")
+    # 分离通道
+    r, g, b, a = cv2.split(rgba)
+    alpha = a.astype(np.float32) / 255.0
+    # 混合公式：result = foreground * alpha + background * (1 - alpha)
+    for c in range(3):
+        bg[:, :, c] = (bg[:, :, c] * (1 - alpha)).astype(np.uint8)
+    fg = cv2.merge([b, g, r])  # OpenCV 是 BGR 顺序，注意这里直接使用 BGR
+    fg = (fg * alpha[..., np.newaxis]).astype(np.uint8)
+    result = cv2.add(fg, bg)
+    return result 
+
+def sample(renderer, background_sampler: BackgroundSampler):
+    rgba, groups = generate_power_rune_sample(renderer)
+    sim_rgba, light_color = sample_color_and_light(rgba)
+    background = background_sampler.sample_background()
+    result_image = blend_with_background(sim_rgba, background)
+    return result_image, light_color, groups

@@ -2,27 +2,6 @@ import numpy as np
 import cv2
 from typing import Tuple
 
-def blend_with_background(rgba: np.ndarray, bg_color: Tuple[int, int, int] = (0, 0, 0)) -> np.ndarray:
-    """
-    将 RGBA 图像与指定颜色的 RGB 背景进行 alpha 混合。
-    bg_color: (B, G, R) 格式的元组，值域 0-255。
-    返回 BGR 格式的图像（适合 OpenCV 显示）。
-    """
-    if rgba.shape[2] != 4:
-        raise ValueError("Input image must be RGBA")
-    # 分离通道
-    r, g, b, a = cv2.split(rgba)
-    alpha = a.astype(np.float32) / 255.0
-    # 背景图像（纯色）
-    bg = np.full((rgba.shape[0], rgba.shape[1], 3), bg_color, dtype=np.uint8)
-    # 混合公式：result = foreground * alpha + background * (1 - alpha)
-    for c in range(3):
-        bg[:, :, c] = (bg[:, :, c] * (1 - alpha)).astype(np.uint8)
-    fg = cv2.merge([b, g, r])  # OpenCV 是 BGR 顺序，注意这里直接使用 BGR
-    fg = (fg * alpha[..., np.newaxis]).astype(np.uint8)
-    result = cv2.add(fg, bg)
-    return result 
-
 def sim_glow_and_color(
     rgba: np.ndarray,                     # (H,W,4) uint8
     light_color: Tuple[int, int, int],    # (R,G,B) 0-255

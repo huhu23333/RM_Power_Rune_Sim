@@ -1,15 +1,13 @@
 import cv2
 from typing import Tuple
 from power_rune_client import PowerRuneRenderer
-from image_process import blend_with_background
-from visualize_utils import draw_keypoints_opencv
+from visualize_utils import draw_keypoints_opencv, blend_with_color_background
 
 # ------------------------------------------------------------
 # 简单交互式显示（支持实时调整相机位姿等）
 # ------------------------------------------------------------
 def run_interactive_demo(renderer: PowerRuneRenderer,
-                         bg_color: Tuple[int, int, int] = (16, 16, 32),
-                         point_color: Tuple[int, int, int] = (0, 255, 0)):
+                         bg_color: Tuple[int, int, int] = (16, 16, 32)):
     """
     交互式演示：循环渲染并显示，支持键盘控制。
     按键说明：
@@ -58,8 +56,8 @@ def run_interactive_demo(renderer: PowerRuneRenderer,
             break
 
         # 合成背景并绘制关键点
-        display_img = blend_with_background(rgba, bg_color)
-        draw_keypoints_opencv(display_img, groups, point_color, radius=6, thickness=-1)
+        display_img = blend_with_color_background(rgba, bg_color)
+        draw_keypoints_opencv(display_img, groups, radius=6, thickness=-1)
 
         cv2.imshow("PowerRune Render", display_img)
         key = cv2.waitKey(1) & 0xFF
@@ -127,5 +125,5 @@ if __name__ == "__main__":
 
     # 启动交互式显示
     # 背景色： (B,G,R)
-    run_interactive_demo(renderer, bg_color=(16, 16, 32), point_color=(0, 255, 0))
+    run_interactive_demo(renderer, bg_color=(16, 16, 32))
  

@@ -1,9 +1,8 @@
 import cv2
 from power_rune_client import PowerRuneRenderer
-from image_process import blend_with_background
 from visualize_utils import draw_keypoints_opencv
 import sampler
-from sampler import generate_power_rune_sample, sample_color_and_light
+from sampler import BackgroundSampler, sample
 
 # ------------------------------------------------------------
 # 可视化主函数
@@ -26,15 +25,13 @@ def main():
     sample_count = 0
     print("按 'n' 生成下一个样本，按 ESC 退出")
 
+    background_sampler = BackgroundSampler()
+
     while True:
         # 生成随机样本
-        rgba, groups = generate_power_rune_sample(renderer)
-        sim_rgba, light_color = sample_color_and_light(rgba)
-
-        # 合成背景并绘制关键点用于显示（不影响原始数据）
-        bg_color = (16, 16, 32)  # 深色背景
-        display_img = blend_with_background(sim_rgba, bg_color)
-        draw_keypoints_opencv(display_img, groups, point_color=(0, 255, 0), radius=6)
+    
+        display_img, light_color, groups = sample(renderer, background_sampler)
+        draw_keypoints_opencv(display_img, groups, radius=6)
 
         cv2.imshow("Sample", display_img)
         key = cv2.waitKey(0) & 0xFF  # 等待按键
