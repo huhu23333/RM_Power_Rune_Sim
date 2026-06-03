@@ -5,3 +5,5 @@ screenshot/*.png
 *.png~
 *.kra~
 __pycache__
+background_images/*
+!background_images/.gitkeep

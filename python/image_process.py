@@ -23,11 +23,6 @@ def blend_with_background(rgba: np.ndarray, bg_color: Tuple[int, int, int] = (0,
     result = cv2.add(fg, bg)
     return result 
 
-import numpy as np
-import cv2
-from typing import Tuple
-
-
 def sim_glow_and_color(
     rgba: np.ndarray,                     # (H,W,4) uint8
     light_color: Tuple[int, int, int],    # (R,G,B) 0-255

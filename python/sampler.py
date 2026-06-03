@@ -103,7 +103,7 @@ def random_fan_states_and_params(num_fans: int = 5) -> Tuple[List[int], List[Opt
 # ------------------------------------------------------------
 # 采样函数：生成一张图像和对应的关键点
 # ------------------------------------------------------------
-def generate_sample(renderer: PowerRuneRenderer,
+def generate_power_rune_sample(renderer: PowerRuneRenderer,
                     center: Tuple[float, float, float] = (0.0, 0.0, 3.0)) -> Tuple[np.ndarray, List]:
     """
     随机生成一个样本。
@@ -148,3 +148,7 @@ def sample_color_and_light(rgba):
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
+
+def sample_background():
+    
+    

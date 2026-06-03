@@ -2,14 +2,14 @@ import cv2
 from power_rune_client import PowerRuneRenderer
 from image_process import blend_with_background
 from visualize_utils import draw_keypoints_opencv
-import sample_power_rune
-from sample_power_rune import generate_sample, sample_color_and_light
+import sampler
+from sampler import generate_power_rune_sample, sample_color_and_light
 
 # ------------------------------------------------------------
 # 可视化主函数
 # ------------------------------------------------------------
 def main():
-    sample_power_rune.set_seed(42)
+    sampler.set_seed(42)
     # 初始化渲染器（分辨率与相机内参匹配，使用演示中的参数）
     renderer = PowerRuneRenderer(logical_width=1280, logical_height=1024)
     renderer.create_power_rune(0.0, 0.0, 3.0)
@@ -28,7 +28,7 @@ def main():
 
     while True:
         # 生成随机样本
-        rgba, groups = generate_sample(renderer)
+        rgba, groups = generate_power_rune_sample(renderer)
         sim_rgba, light_color = sample_color_and_light(rgba)
 
         # 合成背景并绘制关键点用于显示（不影响原始数据）
