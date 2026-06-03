@@ -7,3 +7,5 @@ screenshot/*.png
 __pycache__
 background_images/*
 !background_images/.gitkeep
+generated_dataset/*
+!generated_dataset/.gitkeep
