@@ -249,7 +249,7 @@ def run_interactive_demo(renderer: PowerRuneRenderer,
     """
     cv2.namedWindow("PowerRune Render", cv2.WINDOW_NORMAL)
     # 可选设置窗口大小（根据屏幕调整）
-    cv2.resizeWindow("PowerRune Render", 1280, 720)
+    cv2.resizeWindow("PowerRune Render", 1280, 1024)
 
     # 相机控制变量
     camera_pos = [0.0, 0.0, 0.0]
@@ -335,14 +335,14 @@ def run_interactive_demo(renderer: PowerRuneRenderer,
 # ------------------------------------------------------------
 if __name__ == "__main__":
     # 初始化渲染器（分辨率可根据需要调整）
-    renderer = PowerRuneRenderer(logical_width=1920, logical_height=1080)
+    renderer = PowerRuneRenderer(logical_width=1280, logical_height=1024)
 
     # 创建能量机关模型（位置和实际场景中的原点对齐）
-    renderer.create_power_rune(0.0, -3.0, 3.0)
+    renderer.create_power_rune(0.0, 0.0, 3.0)
 
     # 设置相机内参（与渲染分辨率匹配）
-    renderer.set_camera(1000.0, 1000.0, 960.0, 540.0,
-                        1920, 1080,
+    renderer.set_camera(1300.0, 1300.0, 640.0, 512.0,
+                        1280, 1024,
                         k1=0.0, k2=0.0, p1=0.0, p2=0.0, k3=0.0)
 
     # 可选的初始相机位姿（将在交互函数中被覆盖）
