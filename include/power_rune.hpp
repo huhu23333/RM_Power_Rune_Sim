@@ -224,12 +224,12 @@ public:
         // 将可能有关键点的图像节点统一收集
         image_nodes.push_back({0, front_center_R_node});
         for (auto& fan_node_group : front_fan_node_groups) {
-            image_nodes.push_back({0, fan_node_group.fan_light_node});
-            image_nodes.push_back({0, fan_node_group.target_node});
-            image_nodes.push_back({0, fan_node_group.flowing_arrow_node});
-            image_nodes.push_back({0, fan_node_group.fan_small_activating});
-            image_nodes.push_back({0, fan_node_group.fan_big_activating_inner});
-            image_nodes.push_back({0, fan_node_group.fan_big_activating_outer});
+            image_nodes.push_back({1, fan_node_group.fan_light_node});
+            image_nodes.push_back({2, fan_node_group.target_node});
+            image_nodes.push_back({3, fan_node_group.flowing_arrow_node});
+            image_nodes.push_back({4, fan_node_group.fan_small_activating});
+            image_nodes.push_back({5, fan_node_group.fan_big_activating_inner});
+            image_nodes.push_back({6, fan_node_group.fan_big_activating_outer});
         }
 
         for (int i = 0; i < 5; i += 1) {
