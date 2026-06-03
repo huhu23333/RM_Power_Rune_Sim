@@ -39,6 +39,8 @@ public:
     TextureInfo fan_big_activating_outer_tex_info;
     std::vector<Keypoint> target_keypoints;
     std::vector<Keypoint> flowing_arrow_keypoints;
+    std::vector<Keypoint> center_R_keypoints;
+    std::vector<Keypoint> fan_small_activating_keypoints;
     SceneNode* rune_base_node;
     ImageNode* front_center_R_node;
     SceneNode* front_fan_rotation_center_node;
@@ -68,6 +70,8 @@ public:
         // ---------- 读取关键点文件 ----------
         target_keypoints = LoadKeypointsFromFile("images/results/target.txt");
         flowing_arrow_keypoints = LoadKeypointsFromFile("images/results/flowing_arrow.txt");
+        center_R_keypoints = LoadKeypointsFromFile("images/results/center_R.txt");
+        fan_small_activating_keypoints = LoadKeypointsFromFile("images/results/fan_small_activating.txt");
 
         // ---------- 构建场景节点系统 ----------
         // 中心节点
@@ -77,7 +81,7 @@ public:
                                             0.106, 0.106,
                                             0.0, 0.0, -0.3328-0.1664,
                                             1.0f,
-                                            {}, rune_base_node, 3);
+                                            center_R_keypoints, rune_base_node, 3);
         // 前方扇叶节点
         front_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, -0.3328, rune_base_node);
         front_fan_node_groups.resize(5);
@@ -115,7 +119,7 @@ public:
                                                 0.4171, 0.7455,
                                                 0.0, -0.1543-0.7455/2.0, 0.0,
                                                 1.0f,
-                                                {}, fan_node_group.fan_node, 1);
+                                                fan_small_activating_keypoints, fan_node_group.fan_node, 1);
             fan_node_group.fan_big_activating_inner = CreateImageNode(scene,
                                                 fan_big_activating_inner_tex_info.texture, fan_big_activating_inner_tex_info.width, fan_big_activating_inner_tex_info.height,
                                                 0.4171, 0.7455,
