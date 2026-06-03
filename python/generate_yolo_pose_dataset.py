@@ -165,12 +165,8 @@ def main():
     )
 
     bg_sampler = BackgroundSampler()
-
-    print(f"Generating training set ({args.train} samples)...")
-    for i in range(args.train):
-        generate_sample(renderer, bg_sampler, "train", i)
-        if (i+1) % 100 == 0:
-            print(f"  Generated {i+1}")
+    
+    generate_dataset_yaml()
 
     print(f"Generating validation set ({args.val} samples)...")
     for i in range(args.val):
@@ -178,7 +174,13 @@ def main():
         if (i+1) % 100 == 0:
             print(f"  Generated {i+1}")
 
-    generate_dataset_yaml()
+    print(f"Generating training set ({args.train} samples)...")
+    for i in range(args.train):
+        generate_sample(renderer, bg_sampler, "train", i)
+        if (i+1) % 100 == 0:
+            print(f"  Generated {i+1}")
+
+
     print(f"Dataset saved to {OUTPUT_ROOT}")
 
 if __name__ == "__main__":
