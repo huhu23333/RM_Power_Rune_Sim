@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple
 
-def compute_bbox(xs: np.ndarray, ys: np.ndarray, expand: int = 30) -> Tuple[int, int, int, int]:
+def compute_bbox(xs: np.ndarray, ys: np.ndarray, expand: int = 0) -> Tuple[int, int, int, int]:
     """
     根据关键点计算包围框，并向四周扩展指定像素，最后截断到图像范围内。
 
