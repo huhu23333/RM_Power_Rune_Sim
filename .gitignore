@@ -9,3 +9,4 @@ background_images/*
 !background_images/.gitkeep
 generated_dataset/*
 !generated_dataset/.gitkeep
+runs/
