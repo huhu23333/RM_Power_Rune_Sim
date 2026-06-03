@@ -4,3 +4,4 @@ build/
 screenshot/*.png
 *.png~
 *.kra~
+__pycache__
