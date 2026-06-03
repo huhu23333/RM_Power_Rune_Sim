@@ -64,6 +64,6 @@ def sim_glow_and_color(
 
     return (result * 255.0).astype(np.uint8)
 
-def sgac_params(color_type, ratio):
-    return ([255, 30, 0] if color_type==0 else [0, 130, 255]), ratio*1.0, ratio, 1.0, 3.0+ratio*2.0, 1.0
+def sgac_params(color_type, ratio, blur):
+    return ([255, 30, 0] if color_type==0 else [0, 130, 255]), ratio*1.0, ratio, blur, 3.0+ratio*2.0, blur
 

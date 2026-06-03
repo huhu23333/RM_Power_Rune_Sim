@@ -145,7 +145,8 @@ def generate_power_rune_sample(renderer: PowerRuneRenderer,
 def sample_color_and_light(rgba):
     color = random.randint(0,1)
     intensity = random.uniform(0.0, 1.0)
-    return sim_glow_and_color(rgba, *sgac_params(color, intensity)), color
+    blur = 0.0 if random.random() < 0.1 else 1.0
+    return sim_glow_and_color(rgba, *sgac_params(color, intensity, blur)), color
 
 def set_seed(seed):
     random.seed(seed)
