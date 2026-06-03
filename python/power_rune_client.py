@@ -273,6 +273,8 @@ def run_interactive_demo(renderer: PowerRuneRenderer,
                                  camera_yaw, camera_pitch, camera_roll)
         renderer.set_rune_rotation(rune_angle)
         renderer.set_fan_state(fan_index, fan_state)
+        renderer.set_fan_big_activating_ratio(0, rune_angle%1.0, rune_angle%1.0)
+        renderer.set_flowing_arrow_offset(0, rune_angle%1.0)
 
         # 渲染
         try:
