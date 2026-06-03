@@ -4,16 +4,16 @@
 import math
 import random
 import numpy as np
-import cv2
 from typing import Tuple, List, Optional
-from power_rune_client import PowerRuneRenderer, blend_with_background, draw_keypoints_opencv
+from power_rune_client import PowerRuneRenderer
+from image_process import sim_glow_and_color, sgac_params
 
 # ------------------------------------------------------------
 # 辅助函数：随机生成相机位姿（满足距离和角度约束）
 # ------------------------------------------------------------
 def random_camera_pose(center: Tuple[float, float, float] = (0.0, 0.0, 3.0),
                        distance_range: Tuple[float, float] = (2.0, 8.0),
-                       max_angle_deg: float = 60.0,
+                       max_angle_deg: float = 30.0,
                        random_rotation_range_deg: float = 10.0) -> Tuple[Tuple[float, float, float], float, float, float]:
     """
     随机生成相机位姿，相机位于机关前方圆锥与球壳交集内，并随机偏转欧拉角。
@@ -140,59 +140,11 @@ def generate_sample(renderer: PowerRuneRenderer,
     rgba, groups = renderer.render()
     return rgba, groups
 
+def sample_color_and_light(rgba):
+    color = random.randint(0,1)
+    intensity = random.uniform(0.0, 1.0)
+    return sim_glow_and_color(rgba, *sgac_params(color, intensity)), color
 
-# ------------------------------------------------------------
-# 可视化主函数
-# ------------------------------------------------------------
-def main():
-    # 初始化渲染器（分辨率与相机内参匹配，使用演示中的参数）
-    renderer = PowerRuneRenderer(logical_width=1280, logical_height=1024)
-    renderer.create_power_rune(0.0, 0.0, 3.0)
-
-    # 设置相机内参（与演示一致）
-    renderer.set_camera(1.31280460e+03, 1.31309593e+03, 6.38736364e+02, 5.34133502e+02,
-                        1280, 1024,
-                        k1=-0.05392145, k2=-0.02516686, p1=-0.00222499, p2=-0.00149047, k3=0.43693918)
-
-    # 交互设置
-    cv2.namedWindow("Dataset Sample", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Dataset Sample", 1280, 1024)
-
-    sample_count = 0
-    print("按 's' 保存当前样本（PNG + 关键点文件），按 'n' 生成下一个样本，按 ESC 退出")
-
-    while True:
-        # 生成随机样本
-        rgba, groups = generate_sample(renderer)
-
-        # 合成背景并绘制关键点用于显示（不影响原始数据）
-        bg_color = (16, 16, 32)  # 深色背景
-        display_img = blend_with_background(rgba, bg_color)
-        draw_keypoints_opencv(display_img, groups, point_color=(0, 255, 0), radius=6)
-
-        cv2.imshow("Dataset Sample", display_img)
-        key = cv2.waitKey(0) & 0xFF  # 等待按键
-
-        if key == 27:  # ESC
-            break
-        elif key == ord('s'):
-            # 保存图像和关键点信息
-            img_filename = f"sample_{sample_count:04d}.png"
-            cv2.imwrite(img_filename, cv2.cvtColor(display_img, cv2.COLOR_BGR2BGRA))
-            # 保存关键点（文本格式）
-            kp_filename = f"sample_{sample_count:04d}_keypoints.txt"
-            with open(kp_filename, 'w') as f:
-                for obj_type, indices, xs, ys in groups:
-                    f.write(f"object_type: {obj_type}\n")
-                    for idx, x, y in zip(indices, xs, ys):
-                        f.write(f"  {idx} {x} {y}\n")
-            print(f"Saved: {img_filename} and {kp_filename}")
-            sample_count += 1
-        elif key == ord('n'):
-            continue  # 生成下一张
-
-    cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
