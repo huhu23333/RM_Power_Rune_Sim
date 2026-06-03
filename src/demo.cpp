@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
 
     // ---------- 3. 设置相机参数 ----------
     CameraIntrinsics intrinsics{
-        960, 960,
+        1300, 1300,
         LOGICAL_WIDTH / 2.0, LOGICAL_HEIGHT / 2.0,
         LOGICAL_WIDTH, LOGICAL_HEIGHT
     };
@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
     // 单位：m
     Scene scene;
 
-    std::unique_ptr<PowerRune> power_rune = std::make_unique<PowerRune>(renderer, scene);
+    std::unique_ptr<PowerRune> power_rune = std::make_unique<PowerRune>(renderer, scene, Point3D({0.0, -3.0, 3.0}));
     
     // 背景节点
 

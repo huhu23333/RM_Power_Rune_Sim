@@ -188,15 +188,17 @@ void BuildKeypointAllTextures(
         const auto& proj = projections[ki];
         if (!proj.valid) continue;
 
+        int index = proj.index;
+
         float sx = (float)proj.screen_pt.x;
         float sy = (float)proj.screen_pt.y;
 
         // --- 1. 序号纹理（静态） ---
-        if (ki < index_textures.size() && index_textures[ki]) {
+        if (index < index_textures.size() && index_textures[index]) {
             float tw, th;
-            SDL_GetTextureSize(index_textures[ki], &tw, &th);
-            out_all_textures[ki].push_back(
-                { index_textures[ki], sx + 10.0f, sy - th / 2.0f });
+            SDL_GetTextureSize(index_textures[index], &tw, &th);
+            out_all_textures[index].push_back(
+                { index_textures[index], sx + 10.0f, sy - th / 2.0f });
         }
 
         // --- 2. 坐标信息文字标签 ---

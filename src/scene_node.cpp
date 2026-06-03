@@ -491,11 +491,8 @@ int ImageNode::GetTexHeight() const { return m_tex_height; }
 void ImageNode::SetKeypoints(const std::vector<Keypoint>& kps) { m_keypoints = kps; }
 const std::vector<Keypoint>& ImageNode::GetKeypoints() const { return m_keypoints; }
 
-Point3D ImageNode::GetKeypointWorldPos(size_t index) const
+Point3D ImageNode::GetKeypointWorldPos(const Keypoint& kp) const
 {
-    if (index >= m_keypoints.size()) return {0,0,0};
-
-    const Keypoint& kp = m_keypoints[index];
     double hw = m_display_width / 2.0;
     double hh = m_display_height / 2.0;
 
@@ -525,7 +522,8 @@ void ImageNode::ComputeKeypointProjections(
 
     for (size_t ki = 0; ki < keypoints.size(); ++ki) {
         KeypointProjection proj;
-        proj.world_pt = GetKeypointWorldPos(ki);
+        const Keypoint& kp = m_keypoints[ki];
+        proj.world_pt = GetKeypointWorldPos(kp);
         proj.cam_pt = WorldToCameraTransform(proj.world_pt, camera_pose.position, cam_rot);
 
         if (proj.cam_pt.z <= 0.001) {
@@ -540,6 +538,7 @@ void ImageNode::ComputeKeypointProjections(
         } else {
             proj.valid = true;
         }
+        proj.index = kp.index;
         out_projections.push_back(proj);
     }
 }

@@ -150,6 +150,7 @@ struct Keypoint
 
 // 关键点投影结果（世界坐标、相机坐标、屏幕像素坐标及有效性）
 struct KeypointProjection {
+    int index;
     Point3D world_pt;   // 世界坐标
     Point3D cam_pt;     // 相机坐标系坐标
     Point2D screen_pt;  // 投影后的屏幕坐标（像素）
@@ -210,7 +211,7 @@ public:
 
     void SetKeypoints(const std::vector<Keypoint>& kps);
     const std::vector<Keypoint>& GetKeypoints() const;
-    Point3D GetKeypointWorldPos(size_t index) const;
+    Point3D GetKeypointWorldPos(const Keypoint& kp) const;
 
     void Render(SDL_Renderer* renderer,
                 const CameraIntrinsics& intrinsics,

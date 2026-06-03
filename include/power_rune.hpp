@@ -52,7 +52,7 @@ public:
 
     std::vector<std::pair<int, ImageNode*>> image_nodes;
 
-    PowerRune(SDL_Renderer* renderer, Scene& scene) {
+    PowerRune(SDL_Renderer* renderer, Scene& scene, Point3D center_position) {
         // ---------- 加载纹理 ----------
         center_R_tex_info = LoadTextureFromPNG(renderer, "images/results/center_R.png");
         target_tex_info = LoadTextureFromPNG(renderer, "images/results/target.png");
@@ -71,7 +71,7 @@ public:
 
         // ---------- 构建场景节点系统 ----------
         // 中心节点
-        rune_base_node = CreateSceneNode(scene, 0.0, 0.0, 3.0, nullptr);
+        rune_base_node = CreateSceneNode(scene, center_position.x, center_position.y, center_position.z, nullptr);
         front_center_R_node = CreateImageNode(scene,
                                             center_R_tex_info.texture, center_R_tex_info.width, center_R_tex_info.height,
                                             0.106, 0.106,
