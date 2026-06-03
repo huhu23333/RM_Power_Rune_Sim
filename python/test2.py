@@ -10,7 +10,7 @@ from sampler import BackgroundSampler, sample
 def main():
     sampler.set_seed(42)
     # 初始化渲染器（分辨率与相机内参匹配，使用演示中的参数）
-    renderer = PowerRuneRenderer(logical_width=1280, logical_height=1024)
+    renderer = PowerRuneRenderer(logical_width=1280, logical_height=1024, super_sample_factor=4.0)
     renderer.create_power_rune(0.0, 0.0, 3.0)
 
     # 设置相机内参（与演示一致）

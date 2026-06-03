@@ -7,6 +7,13 @@ import sys
 import numpy as np
 from typing import List, Tuple, Optional
 
+# 可选导入 cv2，用于图像缩放；若没有则使用 numpy 简单缩放
+try:
+    import cv2
+    HAVE_CV2 = True
+except ImportError:
+    HAVE_CV2 = False
+
 # ------------------------------------------------------------
 # KeypointGroup 结构体（与 C 接口对应）
 # ------------------------------------------------------------
@@ -20,19 +27,35 @@ class KeypointGroup(ctypes.Structure):
     ]
 
 # ------------------------------------------------------------
-# PowerRuneRenderer 封装类（与之前相同，略作简化）
+# PowerRuneRenderer 封装类（支持超采样抗锯齿）
 # ------------------------------------------------------------
 class PowerRuneRenderer:
-    """Python 封装类，负责加载动态库并管理渲染会话"""
+    """Python 封装类，负责加载动态库并管理渲染会话，支持超采样抗锯齿"""
 
-    def __init__(self, logical_width: int = 3840, logical_height: int = 2160):
+    def __init__(self, logical_width: int = 3840, logical_height: int = 2160,
+                 super_sample_factor: float = 1.0):
+        """
+        参数:
+            logical_width, logical_height: 最终输出图像的分辨率（宽、高）
+            super_sample_factor: 超采样倍数（≥1），例如 2 表示内部以 2x 分辨率渲染，
+                                 然后下采样到目标尺寸，实现抗锯齿。
+        """
+        self._logical_w = logical_width
+        self._logical_h = logical_height
+        self._super_sample_factor = max(1.0, float(super_sample_factor))
+        self._internal_w = int(round(logical_width * self._super_sample_factor))
+        self._internal_h = int(round(logical_height * self._super_sample_factor))
+
+        # 保存用户原始相机内参（目标尺寸下的值）
+        self._user_intrinsics = None  # 格式: (fx, fy, cx, cy, width, height, k1, k2, p1, p2, k3)
+
         lib_path = self._find_library("power_rune_c_api")
         if lib_path is None:
             raise RuntimeError("Could not find libpower_rune_c_api.so. Make sure build/ directory exists.")
 
         self._lib = ctypes.CDLL(lib_path)
 
-        # 设置函数原型
+        # 设置函数原型（与原来相同）
         self._lib.create_render_session.argtypes = [ctypes.c_int, ctypes.c_int]
         self._lib.create_render_session.restype = ctypes.c_void_p
 
@@ -88,14 +111,12 @@ class PowerRuneRenderer:
         self._lib.free_keypoint_groups.argtypes = [ctypes.c_void_p, ctypes.c_int]
         self._lib.free_keypoint_groups.restype = None
 
-        # 创建会话
-        self._session = self._lib.create_render_session(logical_width, logical_height)
+        # 创建会话（内部使用放大后的分辨率）
+        self._session = self._lib.create_render_session(self._internal_w, self._internal_h)
         if not self._session:
             raise RuntimeError("Failed to create render session")
 
         self._rune = None
-        self._logical_w = logical_width
-        self._logical_h = logical_height
 
     @staticmethod
     def _find_library(name: str) -> Optional[str]:
@@ -134,9 +155,27 @@ class PowerRuneRenderer:
                    width: int, height: int,
                    k1: float = 0.0, k2: float = 0.0,
                    p1: float = 0.0, p2: float = 0.0, k3: float = 0.0):
-        self._lib.set_camera_parameters(self._session, fx, fy, cx, cy,
-                                        width, height,
-                                        k1, k2, p1, p2, k3)
+        """
+        设置相机内参（目标分辨率下的值）。内部会按超采样倍数自动缩放。
+        """
+        # 保存用户原始参数（用于后续返回分辨率判断）
+        self._user_intrinsics = (fx, fy, cx, cy, width, height, k1, k2, p1, p2, k3)
+
+        # 按超采样倍数缩放内参
+        sf = self._super_sample_factor
+        internal_fx = fx * sf
+        internal_fy = fy * sf
+        internal_cx = cx * sf
+        internal_cy = cy * sf
+        internal_w = int(round(width * sf))
+        internal_h = int(round(height * sf))
+
+        self._lib.set_camera_parameters(
+            self._session,
+            internal_fx, internal_fy, internal_cx, internal_cy,
+            internal_w, internal_h,
+            k1, k2, p1, p2, k3
+        )
 
     def set_camera_pose(self, pos_x: float, pos_y: float, pos_z: float,
                         yaw: float, pitch: float, roll: float):
@@ -154,7 +193,40 @@ class PowerRuneRenderer:
     def set_flowing_arrow_offset(self, index: int, offset: float):
         self._lib.set_flowing_arrow_offset(self._rune, index, offset)
 
+    def _downsample_image(self, high_res_image: np.ndarray) -> np.ndarray:
+        """
+        将超采样后的 RGBA 图像降采样到目标分辨率。
+        """
+        h, w = high_res_image.shape[:2]
+        target_w = self._logical_w
+        target_h = self._logical_h
+
+        if w == target_w and h == target_h:
+            return high_res_image
+
+        if HAVE_CV2:
+            # 使用 OpenCV 的 resize，线性插值
+            downsampled = cv2.resize(high_res_image, (target_w, target_h),
+                                     interpolation=cv2.INTER_LINEAR)
+        else:
+            # 纯 numpy 实现（简单最近邻 + 平均，效果较差，但备用）
+            scale_x = w / target_w
+            scale_y = h / target_h
+            downsampled = np.zeros((target_h, target_w, 4), dtype=np.uint8)
+            for i in range(target_h):
+                src_y = int(i * scale_y)
+                for j in range(target_w):
+                    src_x = int(j * scale_x)
+                    downsampled[i, j] = high_res_image[src_y, src_x]
+        return downsampled
+
     def render(self) -> Tuple[np.ndarray, List[Tuple[int, np.ndarray, np.ndarray, np.ndarray]]]:
+        """
+        渲染并返回：
+            - 图像：RGB? 实际为 RGBA，但混合背景后一般转为 BGR
+            - 关键点分组：每个分组的 (object_type, indices, xs, ys)
+              注意：关键点坐标已自动缩放到目标分辨率。
+        """
         out_image = ctypes.c_void_p()
         out_w = ctypes.c_int()
         out_h = ctypes.c_int()
@@ -171,19 +243,24 @@ class PowerRuneRenderer:
 
         h, w = out_h.value, out_w.value
         data = ctypes.string_at(out_image, w * h * 4)
-        image = np.frombuffer(data, dtype=np.uint8).reshape(h, w, 4).copy()
+        high_res_image = np.frombuffer(data, dtype=np.uint8).reshape(h, w, 4).copy()
         self._lib.free_image(out_image)
 
+        # 降采样到目标分辨率
+        final_image = self._downsample_image(high_res_image)
+
+        # 处理关键点：需要将坐标从超采样分辨率缩放到目标分辨率
         groups = []
+        sf = self._super_sample_factor
         if out_num_groups.value > 0:
             group_ptr = ctypes.cast(out_groups, ctypes.POINTER(KeypointGroup))
             for i in range(out_num_groups.value):
                 g = group_ptr[i]
                 n = g.num_keypoints
                 indices = np.array([g.indices[j] for j in range(n)], dtype=np.int32)
-                xs = np.array([g.xs[j] for j in range(n)], dtype=np.float32)
-                ys = np.array([g.ys[j] for j in range(n)], dtype=np.float32)
+                xs = np.array([g.xs[j] / sf for j in range(n)], dtype=np.float32)
+                ys = np.array([g.ys[j] / sf for j in range(n)], dtype=np.float32)
                 groups.append((g.object_type, indices, xs, ys))
             self._lib.free_keypoint_groups(out_groups, out_num_groups)
 
-        return image, groups
+        return final_image, groups
