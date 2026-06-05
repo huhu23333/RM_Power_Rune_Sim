@@ -8,15 +8,8 @@
 #include <memory>
 #include <string>
 
-// #define SORT_BY_TRIANGLES
-
-#ifdef SORT_BY_TRIANGLES
 const double SUBDIV_SCALE = 0.005;
 const int SUBDIV_MAXNUM = 16;
-#else
-const double SUBDIV_SCALE = 0.005;
-const int SUBDIV_MAXNUM = 16;
-#endif
 
 void EulerToMatrix(double yaw, double pitch, double roll, double rot[3][3]);
 void MultiplyMatrix(const double a[3][3], const double b[3][3], double out[3][3]);
@@ -155,8 +148,13 @@ struct KeypointProjection {
     Point3D cam_pt;     // 相机坐标系坐标
     Point2D screen_pt;  // 投影后的屏幕坐标（像素）
     bool   valid;       // 是否在相机前方且投影有效
+    bool   occluded;       // 在投影有效的情况下是否被遮挡，投影无效时为true
 };
 
+struct KeypointExtraInfos {
+    int image_node_index;
+    int type_index;
+};
 
 // 工具函数
 void BuildFaceTriangles(RenderFace& face,
@@ -176,7 +174,7 @@ void RenderKeypoints(
     const DistortionCoefficients& distortion,
     const std::vector<KeypointProjection>& projections,
     const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
-    SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f });
+    SDL_FColor kp_color_dot = { 0.0f, 1.0f, 0.0f, 1.0f }, SDL_FColor kp_color_dot_occluded = {1.0, 1.0, 1.0, 1.0});
 
 // -----------------------------------------------------------------------------
 // 图像节点类
@@ -244,6 +242,8 @@ public:
     // 获取当前裁剪矩形
     void GetDisplayClip(double& min_x, double& max_x, double& min_y, double& max_y) const;
 
+    int GetImageNodeIndex() const;
+
 protected:
     void UpdateFaces();
 
@@ -265,6 +265,8 @@ private:
     double m_clip_max_x = 1.0;
     double m_clip_min_y = 0.0;
     double m_clip_max_y = 1.0;
+
+    int m_image_node_index;
 };
 
 // -----------------------------------------------------------------------------
@@ -285,12 +287,15 @@ public:
     void RenderAll(SDL_Renderer* renderer,
                    const CameraIntrinsics& intrinsics,
                    const DistortionCoefficients& distortion,
-                   const CameraPose& camera_pose) const;
+                   const CameraPose& camera_pose,
+                   std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>>& keypoints);
 
     const std::vector<SceneNodePtr>& GetAllNodes() const;
 
 private:
     std::vector<SceneNodePtr> m_nodes;
+    SDL_Texture* m_offscreen_od_1 = nullptr; // m_offscreen_for_occlusion_detection
+    SDL_Texture* m_offscreen_od_2 = nullptr;
 };
 
 #endif // SCENE_NODE_H

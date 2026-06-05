@@ -385,7 +385,8 @@ int main(int argc, char* argv[])
         BeginOffscreenRender(renderer, offscreen);
 
         // ---- Step 2: 渲染场景节点 ----
-        scene.RenderAll(renderer, intrinsics, distortion, camera_pose);
+        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints;
+        scene.RenderAll(renderer, intrinsics, distortion, camera_pose, keypoints);
 
         SDL_FlushRenderer(renderer);
 

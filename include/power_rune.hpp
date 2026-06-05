@@ -334,17 +334,17 @@ public:
         fan_node_group.flowing_arrow_node -> SetTextureOffset(0.0, offset);
     }
 
-    std::vector<std::pair<int, std::vector<KeypointProjection>>> getShownKeypoints(
+    std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> getShownKeypoints(
         CameraIntrinsics& intrinsics, DistortionCoefficients& distortion,
         CameraPose& camera_pose
     ) {
-        std::vector<std::pair<int, std::vector<KeypointProjection>>> result;
+        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> result;
         for (auto& [type, image_node] : image_nodes) {
             if (image_node -> GetAlpha() != 0.0f) {
                 std::vector<KeypointProjection> projections;
                 image_node -> ComputeKeypointProjections(intrinsics, distortion,
                                                          camera_pose, projections);
-                result.push_back({type, projections});
+                result.push_back({KeypointExtraInfos({image_node->GetImageNodeIndex(), type}), projections});
             }
         }
         return result;

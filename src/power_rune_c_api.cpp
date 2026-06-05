@@ -253,8 +253,10 @@ int render_power_rune(RenderSession session, PowerRuneHandle rune,
     // 2. 更新场景变换（所有节点，包括 PowerRune 内部节点）
     s->scene.UpdateAllTransforms();
 
+    auto keypoint_groups = h->rune->getShownKeypoints(s->intrinsics, s->distortion, s->camera_pose);
+
     // 3. 渲染所有场景节点（不绘制十字丝，不绘制额外 UI）
-    s->scene.RenderAll(s->renderer, s->intrinsics, s->distortion, s->camera_pose);
+    s->scene.RenderAll(s->renderer, s->intrinsics, s->distortion, s->camera_pose, keypoint_groups);
     SDL_FlushRenderer(s->renderer);
 
     // 4. 从离屏纹理读取像素数据
@@ -268,8 +270,11 @@ int render_power_rune(RenderSession session, PowerRuneHandle rune,
     if (!*out_image) return -4;
 
     // 5. 获取关键点投影（按物体分组）
-    auto keypoint_groups = h->rune->getShownKeypoints(s->intrinsics, s->distortion, s->camera_pose);
-    *out_groups = convert_keypoint_groups(keypoint_groups, *out_num_groups);
+    std::vector<std::pair<int, std::vector<KeypointProjection>>> keypoint_groups_simple;
+    for (auto& [extraInfos, projections] : keypoint_groups) {
+        keypoint_groups_simple.push_back({extraInfos.type_index, projections});
+    }
+    *out_groups = convert_keypoint_groups(keypoint_groups_simple, *out_num_groups);
     if (*out_num_groups > 0 && !*out_groups) {
         // 转换失败，释放图像内存
         free_image(*out_image);

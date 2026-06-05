@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <sstream>
+#include <set>
 
 void CameraPose::GetWorldToCameraMatrix(double rot[3][3]) const
 {
@@ -421,12 +422,20 @@ void DrawFilledCircle(SDL_Renderer* renderer, float cx, float cy, float radius, 
 // ImageNode
 // =============================================================================
 
-ImageNode::ImageNode() : SceneNode() {}
+ImageNode::ImageNode() : SceneNode() {
+    static int image_node_counter = 0;
+    m_image_node_index = image_node_counter;
+    image_node_counter += 1;
+}
 ImageNode::~ImageNode()
 {
     if (m_texture && m_owns_texture) {
         SDL_DestroyTexture(m_texture);
     }
+}
+
+int ImageNode::GetImageNodeIndex() const {
+    return m_image_node_index;
 }
 
 void ImageNode::SetTexture(SDL_Texture* tex, int w, int h)
@@ -528,6 +537,7 @@ void ImageNode::ComputeKeypointProjections(
 
         if (proj.cam_pt.z <= 0.001) {
             proj.valid = false;
+            proj.occluded = true;
             out_projections.push_back(proj);
             continue;
         }
@@ -535,8 +545,10 @@ void ImageNode::ComputeKeypointProjections(
         proj.screen_pt = ProjectPoint(proj.cam_pt, intrinsics, distortion);
         if (!proj.screen_pt.valid) {
             proj.valid = false;
+            proj.occluded = true;
         } else {
             proj.valid = true;
+            proj.occluded = false;
         }
         proj.index = kp.index;
         out_projections.push_back(proj);
@@ -549,7 +561,7 @@ void RenderKeypoints(
     const DistortionCoefficients& distortion,
     const std::vector<KeypointProjection>& projections,
     const std::vector<std::vector<ExtraTextureInfo>>& all_extra_textures,
-    SDL_FColor kp_color_dot)
+    SDL_FColor kp_color_dot, SDL_FColor kp_color_dot_occluded)
 {
     for (size_t ki = 0; ki < projections.size(); ++ki) {
         const auto& proj = projections[ki];
@@ -557,7 +569,7 @@ void RenderKeypoints(
 
         float sx = (float)proj.screen_pt.x;
         float sy = (float)proj.screen_pt.y;
-        DrawFilledCircle(renderer, sx, sy, 10.0f, kp_color_dot);
+        DrawFilledCircle(renderer, sx, sy, 10.0f, proj.occluded ? kp_color_dot_occluded : kp_color_dot);
 
         if (ki < all_extra_textures.size()) {
             for (const auto& extra : all_extra_textures[ki]) {
@@ -731,7 +743,12 @@ void ImageNode::GetDisplayClip(double& min_x, double& max_x, double& min_y, doub
 // =============================================================================
 
 Scene::Scene() = default;
-Scene::~Scene() = default;
+Scene::~Scene() {
+    if (m_offscreen_od_1) {
+        SDL_DestroyTexture(m_offscreen_od_1);
+        SDL_DestroyTexture(m_offscreen_od_2);
+    }
+}
 
 SceneNode* Scene::AddNode(SceneNodePtr node)
 {
@@ -759,111 +776,151 @@ void Scene::UpdateAllTransforms()
     }
 }
 
-#ifdef SORT_BY_TRIANGLES
-void Scene::RenderAll(SDL_Renderer* renderer,
-                       const CameraIntrinsics& intrinsics,
-                       const DistortionCoefficients& distortion,
-                       const CameraPose& camera_pose) const
+struct KeypointPixelInfos {
+    int x;
+    int y;
+    bool operator<(const KeypointPixelInfos& other) const {
+        if (x != other.x) return x < other.x;
+        return y < other.y;
+    }
+    int index_outer;
+    int index_inner;
+    int image_node_index;
+    uint8_t rgba_1[4];
+    uint8_t rgba_2[4];
+};
+
+void preProcessKeypoints(
+    std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>>& keypoints,
+    const SDL_Texture* o_offscreen,  // 假设 o_offscreen 有 int w, h 成员
+    std::set<KeypointPixelInfos>& keypoint_pixel_set)
 {
-    struct SortedTriangle {
-        SDL_Texture* texture;
-        SDL_Vertex verts[3];
-        double distance;        // 三角形中心到相机的距离
-        int render_priority;
-    };
-    std::vector<SortedTriangle> sorted_triangles;
+    if (!o_offscreen || o_offscreen->w <= 0 || o_offscreen->h <= 0)
+        return;  // 无效参数
 
-    // 预先计算世界 → 相机的旋转矩阵
-    double cam_rot[3][3];
-    camera_pose.GetWorldToCameraMatrix(cam_rot);
+    for (size_t i_outer = 0; i_outer < keypoints.size(); ++i_outer) {
+        const auto& extra = keypoints[i_outer].first;
+        auto& projections = keypoints[i_outer].second;  // 非常量引用，以便修改 occluded
 
-    // 设置纹理地址模式（所有三角形共用，只需设置一次）
-    SDL_TextureAddressMode prev_u, prev_v;
-    SDL_GetRenderTextureAddressMode(renderer, &prev_u, &prev_v);
-    SDL_SetRenderTextureAddressMode(renderer, SDL_TEXTURE_ADDRESS_WRAP, SDL_TEXTURE_ADDRESS_WRAP);
-
-    for (const auto& node : m_nodes) {
-        const ImageNode* img_node = dynamic_cast<const ImageNode*>(node.get());
-        if (!img_node) continue;
-
-        const RenderFace& face = img_node->GetFace();
-        const int priority = img_node->getRenderPriority();
-        const float alpha = img_node->GetAlpha();
-
-        // 计算所有顶点的屏幕坐标和相机距离
-        std::vector<Point2DUVD> p2duv_verts;
-        p2duv_verts.reserve(face.world_verts.size());
-
-        for (size_t i = 0; i < face.world_verts.size(); ++i) {
-            const WorldVertex& wv = face.world_verts[i];
-            Point3D world_pt = img_node->LocalToWorld(wv.pos);
-            Point3D cam_pt = WorldToCameraTransform(world_pt, camera_pose.position, cam_rot);
-            Point2D screen_pt = ProjectPoint(cam_pt, intrinsics, distortion);
-            double distance = std::sqrt(cam_pt.x * cam_pt.x + cam_pt.y * cam_pt.y + cam_pt.z * cam_pt.z);
-            p2duv_verts.push_back({ screen_pt, wv.u, wv.v, distance });
-        }
-
-        // 遍历所有三角形，构造 SortedTriangle
-        for (size_t i = 0; i < face.world_verts_indices.size(); ++i) {
-            const TriIndices& idx = face.world_verts_indices[i];
-            const Point2DUVD& p0 = p2duv_verts[idx.i];
-            const Point2DUVD& p1 = p2duv_verts[idx.j];
-            const Point2DUVD& p2 = p2duv_verts[idx.k];
-
-            // 跳过完全无效的三角形
-            if (!p0.point2d.valid && !p1.point2d.valid && !p2.point2d.valid)
+        for (size_t i_inner = 0; i_inner < projections.size(); ++i_inner) {
+            auto& proj = projections[i_inner];
+            // 只处理有效投影（可根据需要调整）
+            if (!proj.valid)
                 continue;
 
-            // 三角形中心距离：三个顶点距离的平均值
-            double tri_distance = (p0.distance + p1.distance + p2.distance) / 3.0;
+            // 1. 将 screen_pt 转为整数并截断到 [0, w-1] × [0, h-1]
+            int px = static_cast<int>(proj.screen_pt.x);
+            int py = static_cast<int>(proj.screen_pt.y);
 
-            SortedTriangle tri;
-            tri.texture = face.texture;
-            tri.distance = tri_distance;
-            tri.render_priority = priority;
+            if (px < 0 || py < 0 || px >= o_offscreen->w || py >= o_offscreen->h)
+                continue;
 
-            // 顶点颜色（使用面颜色乘以 alpha）
-            SDL_FColor vert_color = face.color;
-            vert_color.a = alpha;
+            px = std::clamp(px, 0, o_offscreen->w - 1);
+            py = std::clamp(py, 0, o_offscreen->h - 1);
 
-            tri.verts[0] = { { (float)p0.point2d.x, (float)p0.point2d.y }, vert_color, { p0.u, p0.v } };
-            tri.verts[1] = { { (float)p1.point2d.x, (float)p1.point2d.y }, vert_color, { p1.u, p1.v } };
-            tri.verts[2] = { { (float)p2.point2d.x, (float)p2.point2d.y }, vert_color, { p2.u, p2.v } };
+            // 2. 构建候选 KeypointPixelInfos
+            KeypointPixelInfos candidate{
+                px, py,
+                static_cast<int>(i_outer),
+                static_cast<int>(i_inner),
+                extra.image_node_index
+            };
 
-            sorted_triangles.push_back(tri);
+            // 3. 查找是否已有相同坐标的像素点
+            auto it = keypoint_pixel_set.find(candidate);
+            if (it == keypoint_pixel_set.end()) {
+                // 无冲突，直接插入
+                keypoint_pixel_set.insert(candidate);
+            } else {
+                // 有冲突：比较 cam_pt 到原点的距离（平方距离，避免开方）
+                const auto& existing_info = *it;
+                auto& existing_proj = keypoints[existing_info.index_outer].second[existing_info.index_inner];
+
+                auto squared_distance = [](const Point3D& pt) {
+                    return pt.x * pt.x + pt.y * pt.y + pt.z * pt.z;
+                };
+                double dist_existing = squared_distance(existing_proj.cam_pt);
+                double dist_new = squared_distance(proj.cam_pt);
+
+                if (dist_new < dist_existing) {
+                    // 新点更近 -> 旧点被遮挡，移除旧点，插入新点
+                    existing_proj.occluded = true;
+                    keypoint_pixel_set.erase(it);
+                    keypoint_pixel_set.insert(candidate);
+                } else {
+                    // 旧点更近或距离相等 → 新点被遮挡
+                    proj.occluded = true;
+                    // 不插入新点，set 保持不变
+                }
+            }
         }
     }
-
-    // 排序：先按 render_priority 升序（小优先级先渲染），再按距离降序（远的先渲染）
-    std::sort(sorted_triangles.begin(), sorted_triangles.end(),
-        [](const SortedTriangle& a, const SortedTriangle& b) {
-            if (a.render_priority != b.render_priority)
-                return a.render_priority < b.render_priority;
-            return a.distance > b.distance;   // 从远到近
-        });
-
-    // 逐个渲染三角形
-    for (const SortedTriangle& tri : sorted_triangles) {
-        SDL_RenderGeometry(renderer, tri.texture,
-                           tri.verts, 3,
-                           nullptr, 0);
-    }
-
-    // 恢复纹理地址模式
-    SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
-#else
+
+std::vector<KeypointPixelInfos> getKeypointsByImageNodeIndex(
+    const std::set<KeypointPixelInfos>& keypoint_pixel_set,
+    int target_image_node_index)
+{
+    std::vector<KeypointPixelInfos> result;
+    for (const auto& info : keypoint_pixel_set) {
+        if (info.image_node_index == target_image_node_index) {
+            result.push_back(info);
+        }
+    }
+    return result;
+}
+
+// #include <iostream>
+
 void Scene::RenderAll(SDL_Renderer* renderer,
                        const CameraIntrinsics& intrinsics,
                        const DistortionCoefficients& distortion,
-                       const CameraPose& camera_pose) const
+                       const CameraPose& camera_pose,
+                       std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>>& keypoints)
 {
+    bool has_keypoints = false;
+    SDL_Texture* o_offscreen; // original_offscreen
+    std::set<KeypointPixelInfos> keypoint_pixel_set;
+    if (!keypoints.empty()) {
+        has_keypoints = true;
+        o_offscreen = SDL_GetRenderTarget(renderer);
+        if (!m_offscreen_od_1) {
+            m_offscreen_od_1 = SDL_CreateTexture(
+                renderer, SDL_PIXELFORMAT_RGBA32,
+                SDL_TEXTUREACCESS_TARGET, o_offscreen->w, o_offscreen->h);
+            if (!m_offscreen_od_1) {
+                SDL_Log("Create m_offscreen_od_1 texture failed: %s", SDL_GetError());
+            }
+            SDL_SetTextureBlendMode(m_offscreen_od_1, SDL_BLENDMODE_BLEND_PREMULTIPLIED);
+            m_offscreen_od_2 = SDL_CreateTexture(
+                renderer, SDL_PIXELFORMAT_RGBA32,
+                SDL_TEXTUREACCESS_TARGET, o_offscreen->w, o_offscreen->h);
+            if (!m_offscreen_od_2) {
+                SDL_Log("Create m_offscreen_od_2 texture failed: %s", SDL_GetError());
+            }
+            SDL_SetTextureBlendMode(m_offscreen_od_2, SDL_BLENDMODE_BLEND_PREMULTIPLIED);
+        }
+
+        SDL_SetRenderTarget(renderer, m_offscreen_od_1);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+
+        SDL_SetRenderTarget(renderer, m_offscreen_od_2);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+        
+        SDL_SetRenderTarget(renderer, o_offscreen);
+
+        preProcessKeypoints(keypoints, o_offscreen, keypoint_pixel_set);
+    }
+
     struct SortedFace {
         const RenderFace* face;
         const ImageNode* node;
         std::vector<SDL_Vertex> sdl_verts;
         double cam_distance;
         int render_priority;
+        int image_node_index;
     };
     std::vector<SortedFace> sorted_faces;
 
@@ -923,9 +980,10 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             distance_sum += pp0uv.distance + pp1uv.distance + pp2uv.distance;
             visible_tris += 1;
         }
-
+        
         if (visible_tris > 0) {
             sf.cam_distance = distance_sum / visible_tris;
+            sf.image_node_index = img_node -> GetImageNodeIndex();
             sorted_faces.push_back(std::move(sf));
         }
     }
@@ -938,13 +996,127 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         });
 
     for (const auto& sf : sorted_faces) {
+        SDL_SetRenderTarget(renderer, o_offscreen);
         SDL_RenderGeometry(renderer, sf.face->texture,
                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
                            nullptr, 0);
+
+        int image_node_index = sf.image_node_index;
+
+        // std::cout << image_node_index << std::endl;
+
+        if (has_keypoints) {
+
+            SDL_SetRenderTarget(renderer, m_offscreen_od_1);
+            SDL_RenderGeometry(renderer, sf.face->texture,
+                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
+                            nullptr, 0);
+
+            SDL_SetRenderTarget(renderer, m_offscreen_od_2);
+            SDL_RenderGeometry(renderer, sf.face->texture,
+                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
+                            nullptr, 0);
+
+            std::vector<KeypointPixelInfos> its_keypoints = getKeypointsByImageNodeIndex(keypoint_pixel_set, image_node_index);
+
+            if (!its_keypoints.empty()) {
+
+                SDL_FColor white_color = {1.0, 1.0, 1.0, 1.0};
+                SDL_FColor black_color = {0.0, 0.0, 0.0, 1.0};
+                float r_square = 1.0f;
+
+                SDL_SetRenderTarget(renderer, m_offscreen_od_1);
+                for (auto& kpi : its_keypoints) {
+
+                    SDL_Vertex verts[6] = {
+                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
+                        { { (float)kpi.x - r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
+                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
+                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
+                        { { (float)kpi.x + r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
+                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
+                    };
+
+                    SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
+                }
+
+                SDL_SetRenderTarget(renderer, m_offscreen_od_2);
+                for (auto& kpi : its_keypoints) {
+
+                    SDL_Vertex verts[6] = {
+                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
+                        { { (float)kpi.x - r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
+                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
+                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
+                        { { (float)kpi.x + r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
+                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
+                    };
+
+                    SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
+                }
+            }
+        }
+    }
+
+    if (has_keypoints) {
+        std::vector<KeypointPixelInfos> keypoint_pixel_vector;
+
+        for (auto& kpi : keypoint_pixel_set) {
+            keypoint_pixel_vector.push_back(kpi);
+        }
+
+        SDL_SetRenderTarget(renderer, m_offscreen_od_1);
+
+        for (KeypointPixelInfos& kpi : keypoint_pixel_vector) {
+            SDL_Rect pixel_rect;
+            pixel_rect.h = 1;
+            pixel_rect.w = 1;
+            pixel_rect.x = kpi.x;
+            pixel_rect.y = kpi.y;
+            SDL_Surface* od_surface = SDL_RenderReadPixels(renderer, &pixel_rect);
+            memcpy(kpi.rgba_1, od_surface->pixels, 4);
+            SDL_DestroySurface(od_surface);
+        }
+
+        SDL_SetRenderTarget(renderer, m_offscreen_od_2);
+
+        for (KeypointPixelInfos& kpi : keypoint_pixel_vector) {
+            SDL_Rect pixel_rect;
+            pixel_rect.h = 1;
+            pixel_rect.w = 1;
+            pixel_rect.x = kpi.x;
+            pixel_rect.y = kpi.y;
+            SDL_Surface* od_surface = SDL_RenderReadPixels(renderer, &pixel_rect);
+            memcpy(kpi.rgba_2, od_surface->pixels, 4);
+            SDL_DestroySurface(od_surface);
+
+            // std::cout 
+            //     << static_cast<int>(kpi.rgba_1[0]) << "\t"
+            //     << static_cast<int>(kpi.rgba_1[1]) << "\t"
+            //     << static_cast<int>(kpi.rgba_1[2]) << "\t"
+            //     << static_cast<int>(kpi.rgba_1[3]) << "\t"
+            //     << static_cast<int>(kpi.rgba_2[0]) << "\t"
+            //     << static_cast<int>(kpi.rgba_2[1]) << "\t"
+            //     << static_cast<int>(kpi.rgba_2[2]) << "\t"
+            //     << static_cast<int>(kpi.rgba_2[3]) << std::endl;
+
+            if (memcmp(kpi.rgba_1, kpi.rgba_2, 4) == 0) {
+                keypoints[kpi.index_outer].second[kpi.index_inner].occluded = true;
+            } else {
+                keypoints[kpi.index_outer].second[kpi.index_inner].occluded = false;
+            }
+        }
+
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_SetRenderTarget(renderer, o_offscreen);
+
+
+        // SDL_RenderClear(renderer);
+        // SDL_RenderTexture(renderer, m_offscreen_od_2, nullptr, nullptr);
     }
 
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
 }
-#endif
 
 const std::vector<SceneNodePtr>& Scene::GetAllNodes() const { return m_nodes; }

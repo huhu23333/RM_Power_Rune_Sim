@@ -290,9 +290,13 @@ int main(int argc, char* argv[])
         // ---- Step 1: 开始离屏渲染 ----
         BeginOffscreenRender(renderer, offscreen);
 
+        // ---- Step 1.5: 关键点计算 ----
+        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints 
+            = power_rune -> getShownKeypoints(intrinsics, distortion, camera_pose);
+
         // ---- Step 2: 渲染场景节点 ----
         // fan_node_groups[0].target_node->Render(renderer, intrinsics, distortion, camera_pose);
-        scene.RenderAll(renderer, intrinsics, distortion, camera_pose);
+        scene.RenderAll(renderer, intrinsics, distortion, camera_pose, keypoints);
 
         SDL_FlushRenderer(renderer);
 
@@ -300,13 +304,15 @@ int main(int argc, char* argv[])
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
 
         // ---- Step 4: 关键点渲染 ----
+        std::vector<std::pair<int, std::vector<KeypointProjection>>> keypoint_simple;
+        for (auto& [extraInfos, projections] : keypoints) {
+            keypoint_simple.push_back({extraInfos.type_index, projections});
+        }
         if (show_keypoints) {
-            std::vector<std::pair<int, std::vector<KeypointProjection>>> keypoints 
-                = power_rune -> getShownKeypoints(intrinsics, distortion, camera_pose);
-            for (auto& [type, projections] : keypoints) {
+            for (auto& [type, projections] : keypoint_simple) {
                 std::vector<std::vector<ExtraTextureInfo>> all_textures;
                 RenderKeypoints(renderer, intrinsics, distortion,
-                                projections, all_textures, {0.0, 1.0, 1.0, 1.0});
+                                projections, all_textures, {0.0, 1.0, 1.0, 1.0}, {1.0, 0.0, 1.0, 1.0});
             };
         }
 
