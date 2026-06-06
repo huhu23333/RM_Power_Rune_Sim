@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
     // 单位：m
     Scene scene;
 
-    std::unique_ptr<PowerRune> power_rune = std::make_unique<PowerRune>(renderer, scene, Point3D({0.0, -3.0, 3.0}));
+    std::unique_ptr<PowerRune> power_rune = std::make_unique<PowerRune>(renderer, scene, Point3D({0.0, -3.0, 3.0}), true);
     
     // 背景节点
 
