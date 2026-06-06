@@ -27,7 +27,8 @@ struct fan_node_group_t {
 
 class PowerRune {
 public:
-    TextureInfo center_R_tex_info;
+    TextureInfo center_R_R_tex_info;
+    TextureInfo center_R_background_tex_info;
     TextureInfo target_tex_info;
     TextureInfo flowing_arrow_tex_info;
     TextureInfo fan_background_tex_info;
@@ -42,7 +43,9 @@ public:
     std::vector<Keypoint> center_R_keypoints;
     std::vector<Keypoint> fan_small_activating_keypoints;
     SceneNode* rune_base_node;
-    ImageNode* front_center_R_node;
+    SceneNode* front_center_R_node;
+    ImageNode* front_center_R_R_node;
+    ImageNode* front_center_R_background_node;
     SceneNode* front_fan_rotation_center_node;
     std::vector<fan_node_group_t> front_fan_node_groups;
     SceneNode* sketchy_support_node;
@@ -56,7 +59,8 @@ public:
 
     PowerRune(SDL_Renderer* renderer, Scene& scene, Point3D center_position) {
         // ---------- 加载纹理 ----------
-        center_R_tex_info = LoadTextureFromPNG(renderer, "images/results/center_R.png");
+        center_R_R_tex_info = LoadTextureFromPNG(renderer, "images/results/center_R_R.png");
+        center_R_background_tex_info = LoadTextureFromPNG(renderer, "images/results/center_R_background.png");
         target_tex_info = LoadTextureFromPNG(renderer, "images/results/target.png");
         flowing_arrow_tex_info = LoadTextureFromPNG(renderer, "images/results/flowing_arrow.png");
         fan_background_tex_info = LoadTextureFromPNG(renderer, "images/results/fan_background.png");
@@ -76,12 +80,19 @@ public:
         // ---------- 构建场景节点系统 ----------
         // 中心节点
         rune_base_node = CreateSceneNode(scene, center_position.x, center_position.y, center_position.z, nullptr);
-        front_center_R_node = CreateImageNode(scene,
-                                            center_R_tex_info.texture, center_R_tex_info.width, center_R_tex_info.height,
+        front_center_R_node = CreateSceneNode(scene, 0.0, 0.0, -0.3328-0.1664, rune_base_node);
+        front_center_R_R_node = CreateImageNode(scene,
+                                            center_R_R_tex_info.texture, center_R_R_tex_info.width, center_R_R_tex_info.height,
                                             0.106, 0.106,
-                                            0.0, 0.0, -0.3328-0.1664,
+                                            0.0, 0.0, 0.0,
                                             1.0f,
-                                            center_R_keypoints, rune_base_node, 3);
+                                            center_R_keypoints, front_center_R_node, 4);
+        front_center_R_background_node = CreateImageNode(scene,
+                                            center_R_background_tex_info.texture, center_R_background_tex_info.width, center_R_background_tex_info.height,
+                                            0.106, 0.106,
+                                            0.0, 0.0, 0.0,
+                                            1.0f,
+                                            {}, front_center_R_node, 3);
         // 前方扇叶节点
         front_fan_rotation_center_node = CreateSceneNode(scene, 0.0, 0.0, -0.3328, rune_base_node);
         front_fan_node_groups.resize(5);
@@ -226,7 +237,7 @@ public:
         }
 
         // 将可能有关键点的图像节点统一收集
-        image_nodes.push_back({0, front_center_R_node});
+        image_nodes.push_back({0, front_center_R_R_node});
         for (auto& fan_node_group : front_fan_node_groups) {
             image_nodes.push_back({1, fan_node_group.fan_light_node});
             image_nodes.push_back({2, fan_node_group.target_node});
@@ -242,7 +253,8 @@ public:
     }
 
     ~PowerRune() {
-        if (center_R_tex_info.texture) SDL_DestroyTexture(center_R_tex_info.texture);
+        if (center_R_R_tex_info.texture) SDL_DestroyTexture(center_R_R_tex_info.texture);
+        if (center_R_background_tex_info.texture) SDL_DestroyTexture(center_R_background_tex_info.texture);
         if (target_tex_info.texture) SDL_DestroyTexture(target_tex_info.texture);
         if (flowing_arrow_tex_info.texture) SDL_DestroyTexture(flowing_arrow_tex_info.texture);
         if (fan_background_tex_info.texture) SDL_DestroyTexture(fan_background_tex_info.texture);
