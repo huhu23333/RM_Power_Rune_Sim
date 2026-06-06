@@ -10,22 +10,22 @@ from sampler import BackgroundSampler, sample
 def main():
     sampler.set_seed(42)
     # 初始化渲染器（分辨率与相机内参匹配，使用演示中的参数）
-    renderer = PowerRuneRenderer(logical_width=1280, logical_height=1024, super_sample_factor=4.0)
+    origin_image_size = (1280, 1280)
+    renderer = PowerRuneRenderer(logical_width=origin_image_size[0], logical_height=origin_image_size[1], super_sample_factor=2.0)
     renderer.create_power_rune(0.0, 0.0, 3.0)
 
-    # 设置相机内参（与演示一致）
+    # 设置相机内参（与演示一致）(采样时会覆盖)
     renderer.set_camera(1.31280460e+03, 1.31309593e+03, 6.38736364e+02, 5.34133502e+02,
-                        1280, 1024,
+                        origin_image_size[0], origin_image_size[1],
                         k1=-0.05392145, k2=-0.02516686, p1=-0.00222499, p2=-0.00149047, k3=0.43693918)
 
     # 交互设置
     cv2.namedWindow("Sample", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Sample", 1280, 1024)
+    cv2.resizeWindow("Sample", origin_image_size[0], origin_image_size[1])
 
-    sample_count = 0
-    print("按 'n' 生成下一个样本，按 ESC 退出")
+    print("按任意键生成下一个样本，按 ESC 退出")
 
-    background_sampler = BackgroundSampler()
+    background_sampler = BackgroundSampler(origin_image_size)
 
     while True:
         # 生成随机样本
@@ -38,7 +38,7 @@ def main():
 
         if key == 27:  # ESC
             break
-        elif key == ord('n'):
+        else:
             continue  # 生成下一张
 
     cv2.destroyAllWindows()

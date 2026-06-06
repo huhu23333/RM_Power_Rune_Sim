@@ -1070,7 +1070,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
                 };
                 SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
             }
-
         }
     }
 

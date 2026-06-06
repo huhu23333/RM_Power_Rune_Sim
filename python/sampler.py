@@ -15,7 +15,7 @@ import cv2
 # ------------------------------------------------------------
 def random_camera_pose(center: Tuple[float, float, float] = (0.0, 0.0, 3.0),
                        distance_range: Tuple[float, float] = (2.0, 8.0),
-                       max_angle_deg: float = 30.0,
+                       max_angle_deg: float = 60.0,
                        random_rotation_range_deg: float = 10.0) -> Tuple[Tuple[float, float, float], float, float, float]:
     """
     随机生成相机位姿，相机位于机关前方圆锥与球壳交集内，并随机偏转欧拉角。
@@ -57,6 +57,24 @@ def random_camera_pose(center: Tuple[float, float, float] = (0.0, 0.0, 3.0),
     roll += random.uniform(-rand_range_rad, rand_range_rad)
     return (pos[0], pos[1], pos[2]), yaw, pitch, roll
 
+def random_camera_params(origin_image_size):
+    # renderer.set_camera(1.31280460e+03, 1.31309593e+03, 6.38736364e+02, 5.34133502e+02,
+    #                 origin_image_size[0], origin_image_size[1],
+    #                 k1=-0.05392145, k2=-0.02516686, p1=-0.00222499, p2=-0.00149047, k3=0.43693918)
+    fxy = max(random.normalvariate(1300, 300), 300)
+    fx = max(fxy + random.normalvariate(0, 100), 300)
+    fy = max(fxy + random.normalvariate(0, 100), 300)
+
+    cx = random.normalvariate(origin_image_size[0] / 2, origin_image_size[0] * 0.05)
+    cy = random.normalvariate(origin_image_size[1] / 2, origin_image_size[1] * 0.05)
+
+    k1 = random.normalvariate(0, 0.06)
+    k2 = random.normalvariate(0, 0.03)
+    p1 = random.normalvariate(0, 0.002)
+    p2 = random.normalvariate(0, 0.002)
+    k3 = random.normalvariate(0, 0.5)
+
+    return fx, fy, cx, cy, origin_image_size[0], origin_image_size[1], k1, k2, p1, p2, k3
 
 # ------------------------------------------------------------
 # 随机生成扇叶状态及对应参数
@@ -105,7 +123,7 @@ def random_fan_states_and_params(num_fans: int = 5) -> Tuple[List[int], List[Opt
 # ------------------------------------------------------------
 # 采样函数：生成一张图像和对应的关键点
 # ------------------------------------------------------------
-def generate_power_rune_sample(renderer: PowerRuneRenderer,
+def generate_power_rune_sample(renderer: PowerRuneRenderer, origin_image_size,
                     center: Tuple[float, float, float] = (0.0, 0.0, 3.0)) -> Tuple[np.ndarray, List]:
     """
     随机生成一个样本。
@@ -113,6 +131,8 @@ def generate_power_rune_sample(renderer: PowerRuneRenderer,
         image: RGBA 图像 (H, W, 4), 未合成背景，带透明度通道
         keypoint_groups: 列表，格式与 render() 返回的 groups 相同
     """
+    renderer.set_camera(*random_camera_params(origin_image_size))
+
     # 1. 随机相机位姿
     pos, yaw, pitch, roll = random_camera_pose(center)
     renderer.set_camera_pose(pos[0], pos[1], pos[2], yaw, pitch, roll)
@@ -142,18 +162,45 @@ def generate_power_rune_sample(renderer: PowerRuneRenderer,
     rgba, groups = renderer.render()
     return rgba, groups
 
-def sample_color_and_light(rgba):
-    color = random.randint(0,1)
-    intensity = random.uniform(0.0, 1.0)
-    blur = 0.0 if random.random() < 0.1 else 1.0
-    return sim_glow_and_color(rgba, *sgac_params(color, intensity, blur)), color
+def generate_noise_layer(H: int, W: int) -> np.ndarray:
+    """
+    生成与指定尺寸匹配的噪声 RGB 图层（float32, 范围 0~1）。
+    生成规则：
+        1. 随机灰度基底 (0~80)
+        2. 每个通道独立随机偏移 (-20~20)
+        3. 每个像素每个通道添加高斯噪声 N(0, 10)
+        4. 裁剪到 [0, 255] 后归一化到 [0,1]
+    """
+    # 灰度基底
+    base = random.randint(0, 80)
+    # 每个通道的偏移
+    offsets = [random.randint(-20, 20) for _ in range(3)]
+    # 构建初始 RGB
+    rgb = np.full((H, W, 3), base, dtype=np.float32)
+    for c in range(3):
+        rgb[..., c] += offsets[c]
+    # 添加高斯噪声
+    noise = np.random.normal(0, 10, size=(H, W, 3))
+    rgb += noise
+    # 裁剪到有效范围并转为 uint8
+    rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+    # 归一化到 [0,1] float32
+    rgb_float = rgb.astype(np.float32) / 255.0
+    return rgb_float
+
+def sample_color_and_light(rgba, noise_rgb):
+    rand_color = random.randint(0,1)
+    randoms = np.random.random([11])
+    return sim_glow_and_color(rgba, *sgac_params(rand_color, randoms), noise_layer_rgb=noise_rgb), rand_color
 
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
 
+
+    
 class BackgroundSampler:
-    def __init__(self, target_size = (1280, 1024), backgrounds_path=None):
+    def __init__(self, target_size=(1280, 1024), backgrounds_path=None):
         if not backgrounds_path:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             root_dir = os.path.dirname(script_dir)
@@ -168,27 +215,81 @@ class BackgroundSampler:
         self.has_images = (self.image_num > 0)
         self.target_size = target_size
 
+        # 可调节的变换参数范围
+        self.crop_ratio_range = (0.6, 1.0)          # 随机裁切的比例范围
+        self.angle_range = (-30, 30)                # 旋转角度范围（度）
+        self.scale_range = (0.8, 1.2)               # 缩放范围
+        self.translate_range = (-0.1, 0.1)          # 平移范围（相对图像尺寸的比例）
+        self.shear_range = (-0.1, 0.1)              # 错切范围
+
     def sample_background(self):
+        # ---------- 原有流程 ----------
         if self.has_images:
-            image_index = random.randint(0, self.image_num-1)
+            image_index = random.randint(0, self.image_num - 1)
             image = cv2.imread(self.image_paths[image_index])
             image = cv2.resize(image, self.target_size).astype(np.float32)
-            image *= random.random()
+            image *= random.random()                     # 随机亮度缩放
         else:
             image = np.zeros((self.target_size[1], self.target_size[0], 3), dtype=np.uint8)
         
         noise = np.transpose(np.stack([
-            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0,32),
-            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0,32),
-            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0,32)
-            ]), (1,2,0))
+            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0, 32),
+            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0, 32),
+            np.ones((self.target_size[1], self.target_size[0]), dtype=np.float32) * random.randint(0, 32)
+        ]), (1, 2, 0))
         noise += np.random.normal(
             np.zeros_like(image),
             np.ones_like(image, dtype=np.float32) * random.random() * 32
         )
         noise = np.clip(noise, 0, 255).astype(np.uint8)
         result = cv2.add(image.astype(np.uint8), noise)
+
+        # ---------- 新增：随机裁切 ----------
+        H, W = self.target_size[1], self.target_size[0]
+        crop_ratio_w = random.uniform(*self.crop_ratio_range)
+        crop_ratio_h = random.uniform(*self.crop_ratio_range)
+        crop_w = int(W * crop_ratio_w)
+        crop_h = int(H * crop_ratio_h)
+        x = random.randint(0, W - crop_w)
+        y = random.randint(0, H - crop_h)
+        cropped = result[y:y+crop_h, x:x+crop_w]
+        result = cv2.resize(cropped, (W, H), interpolation=cv2.INTER_LINEAR)
+
+        # ---------- 新增：任意线性变换（仿射变换） ----------
+        # 生成随机的仿射变换参数
+        angle = random.uniform(*self.angle_range)
+        scale = random.uniform(*self.scale_range)
+        tx = random.uniform(*self.translate_range) * W
+        ty = random.uniform(*self.translate_range) * H
+        shear_x = random.uniform(*self.shear_range)
+        shear_y = random.uniform(*self.shear_range)
+
+        # 构建仿射变换矩阵 [a, b, c; d, e, f]
+        rad = np.deg2rad(angle)
+        cos_a, sin_a = np.cos(rad), np.sin(rad)
+        # 基础旋转+缩放矩阵
+        a = scale * cos_a
+        b = -scale * sin_a
+        d = scale * sin_a
+        e = scale * cos_a
+        # 添加错切
+        b += shear_x
+        d += shear_y
+        # 平移项
+        c = tx
+        f = ty
+        M = np.array([[a, b, c], [d, e, f]], dtype=np.float32)
+
+        # 应用仿射变换，输出尺寸固定为 target_size
+        result = cv2.warpAffine(
+            result, M, (W, H),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT
+        )
+
         return result
+    
+
 
 def blend_with_background(rgba: np.ndarray, bg: np.ndarray) -> np.ndarray:
     """
@@ -208,9 +309,76 @@ def blend_with_background(rgba: np.ndarray, bg: np.ndarray) -> np.ndarray:
     result = cv2.add(fg, bg)
     return result 
 
+
+
+# ------------------------ 新增：模糊辅助函数 ------------------------
+def generate_motion_blur_kernel(length: int, angle: float) -> np.ndarray:
+    """
+    生成运动模糊核。
+    参数:
+        length: 运动模糊的像素长度（运动轨迹的长度）
+        angle:  运动方向的角度（度），0° 表示水平向右，90° 表示垂直向下
+    返回:
+        归一化的二维核矩阵 (k, k)，k 为奇数
+    """
+    # 确保核尺寸足够大，至少 length+2 并取奇数
+    k = max(3, int(length) + 2)
+    if k % 2 == 0:
+        k += 1
+    center = k // 2
+    kernel = np.zeros((k, k), dtype=np.float32)
+
+    rad = np.deg2rad(angle)
+    dx = np.cos(rad)
+    dy = np.sin(rad)
+
+    half_len = length / 2.0
+    # 沿着运动方向，步长为 1.0 设置权重
+    for t in np.arange(-half_len, half_len + 0.5, 1.0):
+        x = center + t * dx
+        y = center + t * dy
+        ix, iy = int(round(x)), int(round(y))
+        if 0 <= ix < k and 0 <= iy < k:
+            kernel[iy, ix] = 1.0
+
+    # 如果没有点被覆盖（通常不会），退化为单点核
+    if kernel.sum() == 0:
+        kernel[center, center] = 1.0
+    else:
+        kernel /= kernel.sum()
+    return kernel
+
+def apply_random_blur(img: np.ndarray) -> np.ndarray:
+    """
+    对输入的 BGR 图像应用强度随机的高斯模糊和方向/强度随机的运动模糊。
+    返回模糊后的图像（与原图尺寸相同）。
+    """
+    # 1. 随机高斯模糊
+    sigma = random.uniform(-1.0, 2.0)          # 强度随机
+    if sigma > 0:
+        img = cv2.GaussianBlur(img, (0, 0), sigmaX=sigma, sigmaY=sigma)
+
+    # 2. 随机运动模糊
+    motion_len = random.randint(-5, 15)         # 运动像素长度随机
+    motion_angle = random.uniform(0, 360)      # 运动方向随机
+    if motion_len > 0:
+        kernel = generate_motion_blur_kernel(motion_len, motion_angle)
+        # 使用 replicate 边界模式，避免边缘出现黑边
+        img = cv2.filter2D(img, -1, kernel, borderType=cv2.BORDER_REPLICATE)
+
+    return img
+# -----------------------------------------------------------------
+
 def sample(renderer, background_sampler: BackgroundSampler):
-    rgba, groups = generate_power_rune_sample(renderer)
-    sim_rgba, light_color = sample_color_and_light(rgba)
+    rgba, groups = generate_power_rune_sample(renderer, background_sampler.target_size)
+    # 生成噪声图层（尺寸与 rgba 相同）
+    H, W = rgba.shape[0], rgba.shape[1]
+    noise_rgb = generate_noise_layer(H, W)
+    sim_rgba, light_color = sample_color_and_light(rgba, noise_rgb)
     background = background_sampler.sample_background()
     result_image = blend_with_background(sim_rgba, background)
+
+    # ------------------------ 新增：添加随机模糊 ------------------------
+    result_image = apply_random_blur(result_image)
+
     return result_image, light_color, groups

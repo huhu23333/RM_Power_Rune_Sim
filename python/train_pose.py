@@ -7,7 +7,7 @@ import torch
 
 def train():
     # 数据集配置文件路径（生成脚本输出的 dataset.yaml）
-    dataset_yaml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "generated_dataset", "dataset_v1", "dataset.yaml")
+    dataset_yaml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "generated_dataset", "dataset_v2", "dataset.yaml")
     if not os.path.exists(dataset_yaml):
         raise FileNotFoundError(f"Dataset yaml not found: {dataset_yaml}")
 
@@ -16,7 +16,7 @@ def train():
     # 训练参数（关键：禁用水平/垂直翻转）
     results = model.train(
         data=dataset_yaml,
-        epochs=100,
+        epochs=30,
         imgsz=640,
         batch=16,
         device=0 if torch.cuda.is_available() else "cpu",                # GPU ID，若用 CPU 设为 'cpu'
@@ -24,7 +24,8 @@ def train():
         patience=50,
         save=True,
         project="power_rune_train",
-        name="power_rune_exp1",
+        name="power_rune_exp2",
+        optimizer="AdamW",
         # --------------------------------------------------
         # 禁用镜像翻转增强
         fliplr=0.0,               # 水平翻转概率 0%
