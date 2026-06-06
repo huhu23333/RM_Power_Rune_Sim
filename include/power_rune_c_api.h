@@ -18,6 +18,8 @@ typedef struct {
     int* indices;          // 长度 num_keypoints，由接口分配，free_keypoint_groups 负责释放
     float* xs;             // 像素 x 坐标
     float* ys;             // 像素 y 坐标
+    uint8_t* valids;             // 是否在画面内
+    uint8_t* occludeds;             // 是否被遮挡
 } KeypointGroup;
 
 /* ---------- 会话管理 ---------- */

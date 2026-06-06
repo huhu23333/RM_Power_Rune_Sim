@@ -24,6 +24,8 @@ class KeypointGroup(ctypes.Structure):
         ("indices", ctypes.POINTER(ctypes.c_int)),
         ("xs", ctypes.POINTER(ctypes.c_float)),
         ("ys", ctypes.POINTER(ctypes.c_float)),
+        ("valids", ctypes.POINTER(ctypes.c_uint8)),
+        ("occludeds", ctypes.POINTER(ctypes.c_uint8)),
     ]
 
 # ------------------------------------------------------------
@@ -220,7 +222,7 @@ class PowerRuneRenderer:
                     downsampled[i, j] = high_res_image[src_y, src_x]
         return downsampled
 
-    def render(self) -> Tuple[np.ndarray, List[Tuple[int, np.ndarray, np.ndarray, np.ndarray]]]:
+    def render(self) -> Tuple[np.ndarray, List[Tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:
         """
         渲染并返回：
             - 图像：RGB? 实际为 RGBA，但混合背景后一般转为 BGR
@@ -260,7 +262,10 @@ class PowerRuneRenderer:
                 indices = np.array([g.indices[j] for j in range(n)], dtype=np.int32)
                 xs = np.array([g.xs[j] / sf for j in range(n)], dtype=np.float32)
                 ys = np.array([g.ys[j] / sf for j in range(n)], dtype=np.float32)
-                groups.append((g.object_type, indices, xs, ys))
+                valids = np.array([g.valids[j] for j in range(n)], dtype=np.uint8)
+                occludeds = np.array([g.occludeds[j] for j in range(n)], dtype=np.uint8)
+                groups.append((g.object_type, indices, xs, ys, valids, occludeds))
             self._lib.free_keypoint_groups(out_groups, out_num_groups)
 
         return final_image, groups
+    

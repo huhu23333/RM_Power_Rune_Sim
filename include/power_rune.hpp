@@ -71,7 +71,7 @@ public:
         target_keypoints = LoadKeypointsFromFile("images/results/target_simplified.txt");
         flowing_arrow_keypoints = LoadKeypointsFromFile("images/results/flowing_arrow.txt");
         center_R_keypoints = LoadKeypointsFromFile("images/results/center_R_enhanced.txt");
-        fan_small_activating_keypoints = LoadKeypointsFromFile("images/results/fan_small_activating_enhanced_modified.txt");
+        fan_small_activating_keypoints = LoadKeypointsFromFile("images/results/fan_small_activating_enhanced_modified_assembled.txt");
 
         // ---------- 构建场景节点系统 ----------
         // 中心节点

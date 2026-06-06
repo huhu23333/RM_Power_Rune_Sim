@@ -46,7 +46,7 @@ def draw_keypoints_opencv(image_bgr: np.ndarray,
         (128, 255, 0),   # 黄绿
     ]
 
-    for idx, (obj_type, indices, xs, ys) in enumerate(keypoints_groups):
+    for idx, (obj_type, indices, xs, ys, valids, occludeds) in enumerate(keypoints_groups):
         # 为该物体选择颜色（基于物体索引循环取色）
         color = color_palette[idx % len(color_palette)]
 
@@ -70,10 +70,11 @@ def draw_keypoints_opencv(image_bgr: np.ndarray,
                         cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, text_thickness)
 
         # 绘制关键点及其索引
-        for i, (x, y) in enumerate(zip(xs, ys)):
+        for i, (x, y, valid, occluded) in enumerate(zip(xs, ys, valids, occludeds)):
             cx, cy = int(round(x)), int(round(y))
             if 0 <= cx < image_bgr.shape[1] and 0 <= cy < image_bgr.shape[0]:
-                cv2.circle(image_bgr, (cx, cy), radius, color, thickness)
+                use_color = color if (valid == 1 and occluded == 0) else (255, 255, 255)
+                cv2.circle(image_bgr, (cx, cy), radius, use_color, thickness)
 
                 # ---- 2. 绘制关键点索引 ----
                 # 获取当前关键点的索引值（来自 indices 列表）
@@ -92,7 +93,7 @@ def draw_keypoints_opencv(image_bgr: np.ndarray,
                 cv2.putText(image_bgr, idx_str, (text_cx, text_cy),
                             cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), text_thickness + 1)
                 cv2.putText(image_bgr, idx_str, (text_cx, text_cy),
-                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, text_thickness)
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, use_color, text_thickness)
  
 def blend_with_color_background(rgba: np.ndarray, bg_color: Tuple[int, int, int] = (0, 0, 0)) -> np.ndarray:
     """

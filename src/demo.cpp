@@ -304,12 +304,8 @@ int main(int argc, char* argv[])
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
 
         // ---- Step 4: 关键点渲染 ----
-        std::vector<std::pair<int, std::vector<KeypointProjection>>> keypoint_simple;
-        for (auto& [extraInfos, projections] : keypoints) {
-            keypoint_simple.push_back({extraInfos.type_index, projections});
-        }
         if (show_keypoints) {
-            for (auto& [type, projections] : keypoint_simple) {
+            for (auto& [type, projections] : keypoints) {
                 std::vector<std::vector<ExtraTextureInfo>> all_textures;
                 RenderKeypoints(renderer, intrinsics, distortion,
                                 projections, all_textures, {0.0, 1.0, 1.0, 1.0}, {1.0, 0.0, 1.0, 1.0});

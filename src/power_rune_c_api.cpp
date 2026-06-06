@@ -78,12 +78,17 @@ static KeypointGroup* convert_keypoint_groups(
             c_groups[gi].indices = static_cast<int*>(SDL_malloc(n * sizeof(int)));
             c_groups[gi].xs = static_cast<float*>(SDL_malloc(n * sizeof(float)));
             c_groups[gi].ys = static_cast<float*>(SDL_malloc(n * sizeof(float)));
-            if (!c_groups[gi].indices || !c_groups[gi].xs || !c_groups[gi].ys) {
+            c_groups[gi].valids = static_cast<uint8_t*>(SDL_malloc(n * sizeof(uint8_t)));
+            c_groups[gi].occludeds = static_cast<uint8_t*>(SDL_malloc(n * sizeof(uint8_t)));
+            if (!c_groups[gi].indices || !c_groups[gi].xs || !c_groups[gi].ys ||
+                !c_groups[gi].valids || !c_groups[gi].occludeds) {
                 // 清理已分配的内存并返回错误（这里简单置空，调用者需处理）
                 for (int j = 0; j <= gi; ++j) {
                     SDL_free(c_groups[j].indices);
                     SDL_free(c_groups[j].xs);
                     SDL_free(c_groups[j].ys);
+                    SDL_free(c_groups[j].valids);
+                    SDL_free(c_groups[j].occludeds);
                 }
                 SDL_free(c_groups);
                 return nullptr;
@@ -93,11 +98,15 @@ static KeypointGroup* convert_keypoint_groups(
                 c_groups[gi].indices[ki] = proj.index;
                 c_groups[gi].xs[ki] = static_cast<float>(proj.screen_pt.x);
                 c_groups[gi].ys[ki] = static_cast<float>(proj.screen_pt.y);
+                c_groups[gi].valids[ki] = static_cast<uint8_t>(proj.valid);
+                c_groups[gi].occludeds[ki] = static_cast<uint8_t>(proj.occluded);
             }
         } else {
             c_groups[gi].indices = nullptr;
             c_groups[gi].xs = nullptr;
             c_groups[gi].ys = nullptr;
+            c_groups[gi].valids = nullptr;
+            c_groups[gi].occludeds = nullptr;
         }
     }
     return c_groups;
@@ -297,6 +306,8 @@ void free_keypoint_groups(KeypointGroup* groups, int num_groups)
         SDL_free(groups[i].indices);
         SDL_free(groups[i].xs);
         SDL_free(groups[i].ys);
+        SDL_free(groups[i].valids);
+        SDL_free(groups[i].occludeds);
     }
     SDL_free(groups);
 }
