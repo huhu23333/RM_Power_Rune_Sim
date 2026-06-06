@@ -529,6 +529,8 @@ void ImageNode::ComputeKeypointProjections(
     double cam_rot[3][3];
     camera_pose.GetWorldToCameraMatrix(cam_rot);
 
+    bool has_frame_size = (intrinsics.width > 0 && intrinsics.height > 0);
+
     for (size_t ki = 0; ki < keypoints.size(); ++ki) {
         KeypointProjection proj;
         const Keypoint& kp = m_keypoints[ki];
@@ -547,8 +549,24 @@ void ImageNode::ComputeKeypointProjections(
             proj.valid = false;
             proj.occluded = true;
         } else {
-            proj.valid = true;
-            proj.occluded = false;
+            if (has_frame_size) {
+                if (
+                    proj.screen_pt.x < 0 ||
+                    proj.screen_pt.x >= intrinsics.width ||
+                    proj.screen_pt.y < 0 ||
+                    proj.screen_pt.y >= intrinsics.height
+                ) {
+                    proj.valid = false;
+                    proj.occluded = true;
+                } else {
+                    proj.valid = true;
+                    proj.occluded = false;
+                }
+            }
+            else {
+                proj.valid = true;
+                proj.occluded = false;
+            }
         }
         proj.index = kp.index;
         out_projections.push_back(proj);
@@ -806,14 +824,20 @@ void preProcessKeypoints(
             auto& proj = projections[i_inner];
             // 只处理有效投影（可根据需要调整）
             if (!proj.valid)
+            {
+                proj.occluded = true;
                 continue;
+            }
 
             // 1. 将 screen_pt 转为整数并截断到 [0, w-1] × [0, h-1]
             int px = static_cast<int>(proj.screen_pt.x);
             int py = static_cast<int>(proj.screen_pt.y);
 
             if (px < 0 || py < 0 || px >= o_offscreen->w || py >= o_offscreen->h)
+            {
+                proj.occluded = true;
                 continue;
+            }
 
             px = std::clamp(px, 0, o_offscreen->w - 1);
             py = std::clamp(py, 0, o_offscreen->h - 1);
