@@ -879,11 +879,10 @@ void Scene::RenderAll(SDL_Renderer* renderer,
                        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>>& keypoints)
 {
     bool has_keypoints = false;
-    SDL_Texture* o_offscreen; // original_offscreen
+    SDL_Texture* o_offscreen = SDL_GetRenderTarget(renderer);; // original_offscreen
     std::set<KeypointPixelInfos> keypoint_pixel_set;
     if (!keypoints.empty()) {
         has_keypoints = true;
-        o_offscreen = SDL_GetRenderTarget(renderer);
         if (!m_offscreen_od_1) {
             m_offscreen_od_1 = SDL_CreateTexture(
                 renderer, SDL_PIXELFORMAT_RGBA32,

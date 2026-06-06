@@ -388,7 +388,7 @@ int main(int argc, char* argv[])
         std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints;
         scene.RenderAll(renderer, intrinsics, distortion, camera_pose, keypoints);
 
-        SDL_FlushRenderer(renderer);
+        // SDL_FlushRenderer(renderer);
 
         // ---- Step 3: 绘制十字丝 ----
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
