@@ -925,11 +925,9 @@ void Scene::RenderAll(SDL_Renderer* renderer,
         }
 
         SDL_SetRenderTarget(renderer, m_offscreen_od_1);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
 
         SDL_SetRenderTarget(renderer, m_offscreen_od_2);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         
         SDL_SetRenderTarget(renderer, o_offscreen);
@@ -1018,66 +1016,61 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             return a.cam_distance > b.cam_distance; 
         });
 
+    std::vector<std::pair<SortedFace, std::vector<KeypointPixelInfos>>> sorted_faces_after_has_keypoints;
+
+    bool start_has_keypoints = false;
     for (const auto& sf : sorted_faces) {
-        SDL_SetRenderTarget(renderer, o_offscreen);
         SDL_RenderGeometry(renderer, sf.face->texture,
                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
                            nullptr, 0);
-
         int image_node_index = sf.image_node_index;
-
-        // std::cout << image_node_index << std::endl;
-
         if (has_keypoints) {
-
-            SDL_SetRenderTarget(renderer, m_offscreen_od_1);
-            SDL_RenderGeometry(renderer, sf.face->texture,
-                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
-                            nullptr, 0);
-
-            SDL_SetRenderTarget(renderer, m_offscreen_od_2);
-            SDL_RenderGeometry(renderer, sf.face->texture,
-                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
-                            nullptr, 0);
-
             std::vector<KeypointPixelInfos> its_keypoints = getKeypointsByImageNodeIndex(keypoint_pixel_set, image_node_index);
-
-            if (!its_keypoints.empty()) {
-
-                SDL_FColor white_color = {1.0, 1.0, 1.0, 1.0};
-                SDL_FColor black_color = {0.0, 0.0, 0.0, 1.0};
-                float r_square = 1.0f;
-
-                SDL_SetRenderTarget(renderer, m_offscreen_od_1);
-                for (auto& kpi : its_keypoints) {
-
-                    SDL_Vertex verts[6] = {
-                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
-                        { { (float)kpi.x - r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
-                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
-                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
-                        { { (float)kpi.x + r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
-                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
-                    };
-
-                    SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
-                }
-
-                SDL_SetRenderTarget(renderer, m_offscreen_od_2);
-                for (auto& kpi : its_keypoints) {
-
-                    SDL_Vertex verts[6] = {
-                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
-                        { { (float)kpi.x - r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
-                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
-                        { { (float)kpi.x - r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
-                        { { (float)kpi.x + r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
-                        { { (float)kpi.x + r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
-                    };
-
-                    SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
-                }
+            if (start_has_keypoints || !its_keypoints.empty()) {
+                start_has_keypoints = true;
+                sorted_faces_after_has_keypoints.push_back({sf, its_keypoints});
             }
+        }
+    }
+
+    if (has_keypoints) {
+        SDL_FColor white_color = {1.0, 1.0, 1.0, 1.0};
+        SDL_FColor black_color = {0.0, 0.0, 0.0, 1.0};
+        float r_square = 1.0f;
+        SDL_SetRenderTarget(renderer, m_offscreen_od_1);
+        for (const auto& [sf, its_keypoints] : sorted_faces_after_has_keypoints) {
+            SDL_RenderGeometry(renderer, sf.face->texture,
+                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
+                            nullptr, 0);
+            for (auto& kpi : its_keypoints) {
+                SDL_Vertex verts[6] = {
+                    { { (float)kpi.x - r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
+                    { { (float)kpi.x - r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
+                    { { (float)kpi.x + r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
+                    { { (float)kpi.x - r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
+                    { { (float)kpi.x + r_square, (float)kpi.y - r_square }, black_color, { 0, 0 } },
+                    { { (float)kpi.x + r_square, (float)kpi.y + r_square }, black_color, { 0, 0 } },
+                };
+                SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
+            }
+        }
+        SDL_SetRenderTarget(renderer, m_offscreen_od_2);
+        for (const auto& [sf, its_keypoints] : sorted_faces_after_has_keypoints) {
+            SDL_RenderGeometry(renderer, sf.face->texture,
+                            sf.sdl_verts.data(), (int)sf.sdl_verts.size(),
+                            nullptr, 0);
+            for (auto& kpi : its_keypoints) {
+                SDL_Vertex verts[6] = {
+                    { { (float)kpi.x - r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
+                    { { (float)kpi.x - r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
+                    { { (float)kpi.x + r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
+                    { { (float)kpi.x - r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
+                    { { (float)kpi.x + r_square, (float)kpi.y - r_square }, white_color, { 0, 0 } },
+                    { { (float)kpi.x + r_square, (float)kpi.y + r_square }, white_color, { 0, 0 } },
+                };
+                SDL_RenderGeometry(renderer, nullptr, verts, 6, nullptr, 0);
+            }
+
         }
     }
 
@@ -1113,16 +1106,6 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             memcpy(kpi.rgba_2, od_surface->pixels, 4);
             SDL_DestroySurface(od_surface);
 
-            // std::cout 
-            //     << static_cast<int>(kpi.rgba_1[0]) << "\t"
-            //     << static_cast<int>(kpi.rgba_1[1]) << "\t"
-            //     << static_cast<int>(kpi.rgba_1[2]) << "\t"
-            //     << static_cast<int>(kpi.rgba_1[3]) << "\t"
-            //     << static_cast<int>(kpi.rgba_2[0]) << "\t"
-            //     << static_cast<int>(kpi.rgba_2[1]) << "\t"
-            //     << static_cast<int>(kpi.rgba_2[2]) << "\t"
-            //     << static_cast<int>(kpi.rgba_2[3]) << std::endl;
-
             if (memcmp(kpi.rgba_1, kpi.rgba_2, 4) == 0) {
                 keypoints[kpi.index_outer].second[kpi.index_inner].occluded = true;
             } else {
@@ -1130,13 +1113,7 @@ void Scene::RenderAll(SDL_Renderer* renderer,
             }
         }
 
-
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_SetRenderTarget(renderer, o_offscreen);
-
-
-        // SDL_RenderClear(renderer);
-        // SDL_RenderTexture(renderer, m_offscreen_od_2, nullptr, nullptr);
     }
 
     SDL_SetRenderTextureAddressMode(renderer, prev_u, prev_v);
