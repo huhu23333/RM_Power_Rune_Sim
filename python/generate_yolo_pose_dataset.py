@@ -18,7 +18,7 @@ from keypoint_utils import compute_bbox
 # ------------------------------------------------------------
 # 配置参数
 # ------------------------------------------------------------
-DATASET_VERSION = "dataset_v2"
+DATASET_VERSION = "dataset_v3"
 OUTPUT_ROOT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "generated_dataset", DATASET_VERSION
 )
@@ -176,40 +176,81 @@ def main():
     parser.add_argument("--val", type=int, default=200)
     parser.add_argument("--supersample", type=float, default=2.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--sub_process_index", type=int, default=-1)
+    parser.add_argument("--sub_process_start_index", type=int, default=0)
+    parser.add_argument("--sub_process_train", type=int, default=0)
+    parser.add_argument("--sub_process_val", type=int, default=0)
+    parser.add_argument("--sub_process_yaml", type=int, default=0)
     args = parser.parse_args()
 
     sampler.set_seed(args.seed)
 
-    from power_rune_client import PowerRuneRenderer
-    renderer = PowerRuneRenderer(logical_width=RENDER_WIDTH,
-                                 logical_height=RENDER_HEIGHT,
-                                 super_sample_factor=args.supersample)
-    renderer.create_power_rune(0.0, 0.0, 3.0)
+    if args.sub_process_index == -1:
+        from power_rune_client import PowerRuneRenderer
+        renderer = PowerRuneRenderer(logical_width=RENDER_WIDTH,
+                                    logical_height=RENDER_HEIGHT,
+                                    super_sample_factor=args.supersample)
+        renderer.create_power_rune(0.0, 0.0, 3.0)
 
-    renderer.set_camera(
-        1.31280460e+03, 1.31309593e+03, 6.38736364e+02, 5.34133502e+02,
-        RENDER_WIDTH, RENDER_HEIGHT,
-        k1=-0.05392145, k2=-0.02516686, p1=-0.00222499, p2=-0.00149047, k3=0.43693918
-    )
+        renderer.set_camera(
+            1.31280460e+03, 1.31309593e+03, 6.38736364e+02, 5.34133502e+02,
+            RENDER_WIDTH, RENDER_HEIGHT,
+            k1=-0.05392145, k2=-0.02516686, p1=-0.00222499, p2=-0.00149047, k3=0.43693918
+        )
 
-    bg_sampler = BackgroundSampler((RENDER_WIDTH, RENDER_HEIGHT))
+        bg_sampler = BackgroundSampler((RENDER_WIDTH, RENDER_HEIGHT))
 
-    print(f"Generating validation set ({args.val} samples)...")
-    for i in range(args.val):
-        generate_sample(renderer, bg_sampler, "val", i)
-        if (i+1) % 100 == 0:
-            print(f"  Generated {i+1}")
+        print(f"Generating validation set ({args.val} samples)...")
+        for i in range(args.val):
+            generate_sample(renderer, bg_sampler, "val", i)
+            if (i+1) % 100 == 0:
+                print(f"  Generated {i+1}")
 
-    generate_dataset_yaml()
+        generate_dataset_yaml()
 
-    print(f"Generating training set ({args.train} samples)...")
-    for i in range(args.train):
-        generate_sample(renderer, bg_sampler, "train", i)
-        if (i+1) % 100 == 0:
-            print(f"  Generated {i+1}")
+        print(f"Generating training set ({args.train} samples)...")
+        for i in range(args.train):
+            generate_sample(renderer, bg_sampler, "train", i)
+            if (i+1) % 100 == 0:
+                print(f"  Generated {i+1}")
 
 
-    print(f"Dataset saved to {OUTPUT_ROOT}")
+        print(f"Dataset saved to {OUTPUT_ROOT}")
+
+    else: 
+
+        from power_rune_client import PowerRuneRenderer
+        renderer = PowerRuneRenderer(logical_width=RENDER_WIDTH,
+                                    logical_height=RENDER_HEIGHT,
+                                    super_sample_factor=args.supersample)
+        renderer.create_power_rune(0.0, 0.0, 3.0)
+
+        renderer.set_camera(
+            1.31280460e+03, 1.31309593e+03, 6.38736364e+02, 5.34133502e+02,
+            RENDER_WIDTH, RENDER_HEIGHT,
+            k1=-0.05392145, k2=-0.02516686, p1=-0.00222499, p2=-0.00149047, k3=0.43693918
+        )
+
+        bg_sampler = BackgroundSampler((RENDER_WIDTH, RENDER_HEIGHT))
+
+        if args.sub_process_val > 0:
+            print(f"Generating validation set ({args.sub_process_val} samples)...")
+            for i in range(args.sub_process_start_index, args.sub_process_start_index + args.sub_process_val):
+                generate_sample(renderer, bg_sampler, "val", i)
+                if (i+1 - args.sub_process_start_index) % 100 == 0:
+                    print(f"  Sub Process[{args.sub_process_index}] Generated {i+1 - args.sub_process_start_index}")
+
+        if args.sub_process_train > 0:
+            print(f"Generating training set ({args.sub_process_train} samples)...")
+            for i in range(args.sub_process_start_index, args.sub_process_start_index + args.sub_process_train):
+                generate_sample(renderer, bg_sampler, "train", i)
+                if (i+1 - args.sub_process_start_index) % 100 == 0:
+                    print(f"  Sub Process[{args.sub_process_index}] Generated {i+1 - args.sub_process_start_index}")
+
+        if args.sub_process_yaml > 0:
+            generate_dataset_yaml()
+
+        print(f"Sub Process[{args.sub_process_index}] Finished")
 
 if __name__ == "__main__":
     main()
