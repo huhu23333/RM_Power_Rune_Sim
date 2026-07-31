@@ -7,7 +7,7 @@ import torch
 
 def train():
     # 数据集配置文件路径（生成脚本输出的 dataset.yaml）
-    dataset_yaml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "generated_dataset", "dataset_v3", "dataset.yaml")
+    dataset_yaml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "generated_dataset", "dataset_v4", "dataset.yaml")
     if not os.path.exists(dataset_yaml):
         raise FileNotFoundError(f"Dataset yaml not found: {dataset_yaml}")
 
