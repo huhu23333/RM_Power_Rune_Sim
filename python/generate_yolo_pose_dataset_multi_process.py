@@ -5,8 +5,8 @@ import os
 def main():
     n_process = 10
     seed = 42
-    train_num = 1000
-    val_num = 200
+    train_num = 20000
+    val_num = 500
 
     random.seed(seed)
     sub_seed_list = []

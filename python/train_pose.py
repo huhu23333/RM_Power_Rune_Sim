@@ -24,7 +24,7 @@ def train():
         patience=50,
         save=True,
         project="power_rune_train",
-        name="power_rune_exp3",
+        name="power_rune_exp4",
         # optimizer="AdamW",
         # --------------------------------------------------
         # 禁用镜像翻转增强
