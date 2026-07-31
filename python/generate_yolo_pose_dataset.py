@@ -18,7 +18,7 @@ from keypoint_utils import compute_bbox
 # ------------------------------------------------------------
 # 配置参数
 # ------------------------------------------------------------
-DATASET_VERSION = "dataset_v3"
+DATASET_VERSION = "dataset_v4"
 OUTPUT_ROOT = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "generated_dataset", DATASET_VERSION
 )
@@ -28,7 +28,6 @@ RENDER_WIDTH = 1280
 RENDER_HEIGHT = 1280
 SCALE_X = OUTPUT_SIZE / RENDER_WIDTH
 SCALE_Y = OUTPUT_SIZE / RENDER_HEIGHT
-MAX_KEYPOINTS = 11
 VISIBLE_VALID = 2
 VISIBLE_OBSCURED = 1
 VISIBLE_MISSING = 0
@@ -53,27 +52,37 @@ TYPE_TO_YOLO_CLASS = {
 }
 
 FILTER_MAXNUMS = {
+    0 : 8,
+    1 : 9,
+    2 : 4,
     3 : 11
 }
+# 各基础类别在全局关键点数组中的起始偏移
+_KPT_OFFSET = {}
+_offset = 0
+for _k in sorted(FILTER_MAXNUMS.keys()):
+    _KPT_OFFSET[_k] = _offset
+    _offset += FILTER_MAXNUMS[_k]
+TOTAL_KEYPOINTS = _offset  # 所有类别关键点总数
 
 # ------------------------------------------------------------
 def filter_and_pad_keypoints(xs: np.ndarray, ys: np.ndarray, indices: np.ndarray, valids: np.ndarray, occludeds: np.ndarray, obj_type: int) -> np.ndarray:
+    """将单个物体的关键点填入全局 TOTAL_KEYPOINTS 数组中,其它不相关索引 visibility=0"""
     c_ = TYPE_TO_YOLO_CLASS[obj_type]
-    filter_maxnum = FILTER_MAXNUMS[c_] if c_ in FILTER_MAXNUMS else MAX_KEYPOINTS
-    if filter_maxnum > MAX_KEYPOINTS:
-        print(f"Warning: filter_maxnum:{filter_maxnum} > MAX_KEYPOINTS, clip")
-        filter_maxnum = MAX_KEYPOINTS
-    padded = np.zeros((MAX_KEYPOINTS, 3), dtype=np.float32)
+    assert c_ in FILTER_MAXNUMS
+    filter_maxnum = FILTER_MAXNUMS[c_]
+    offset = _KPT_OFFSET[c_]
+    padded = np.zeros((TOTAL_KEYPOINTS, 3), dtype=np.float32)
     for idx, x, y, valid, occluded in zip(indices, xs, ys, valids, occludeds):
         if idx >= filter_maxnum:
             continue
-        else:
-            invisible = occluded or (x<0 or x>1 or y<0 or y>1) or (not valid)
-            x = max(min(x, 1.0), 0.0)
-            y = max(min(y, 1.0), 0.0)
-            padded[idx, 0] = x
-            padded[idx, 1] = y
-            padded[idx, 2] = VISIBLE_OBSCURED if invisible else VISIBLE_VALID
+        invisible = occluded or (x<0 or x>1 or y<0 or y>1) or (not valid)
+        x = max(min(x, 1.0), 0.0)
+        y = max(min(y, 1.0), 0.0)
+        global_idx = offset + idx
+        padded[global_idx, 0] = x
+        padded[global_idx, 1] = y
+        padded[global_idx, 2] = VISIBLE_OBSCURED if invisible else VISIBLE_VALID
     return padded
 
 # ------------------------------------------------------------
@@ -116,7 +125,7 @@ def groups_to_yolo_labels(groups: List[Tuple[int, np.ndarray, np.ndarray, np.nda
 
         parts = [str(class_id), f"{box_cx_norm:.6f}", f"{box_cy_norm:.6f}",
                  f"{box_w_norm:.6f}", f"{box_h_norm:.6f}"]
-        for i in range(MAX_KEYPOINTS):
+        for i in range(TOTAL_KEYPOINTS):
             parts.append(f"{padded_kps[i,0]:.6f}")
             parts.append(f"{padded_kps[i,1]:.6f}")
             parts.append(str(int(padded_kps[i,2])))
@@ -160,7 +169,7 @@ def generate_dataset_yaml():
         'val': 'images/val',
         'nc': NUM_CLASSES,
         'names': CLASS_NAMES,
-        'kpt_shape': [MAX_KEYPOINTS, 3],
+        'kpt_shape': [TOTAL_KEYPOINTS, 3],
         'flip_idx': []   # 无镜像翻转，无需关键点对称映射
     }
     yaml_path = os.path.join(OUTPUT_ROOT, 'dataset.yaml')
