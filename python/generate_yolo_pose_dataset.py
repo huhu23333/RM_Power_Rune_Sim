@@ -14,6 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sampler
 from sampler import BackgroundSampler, sample
 from keypoint_utils import compute_bbox
+from dataset_config import (TYPE_TO_YOLO_CLASS, FILTER_MAXNUMS,
+                            CLASS_NAMES, NUM_CLASSES, TOTAL_KEYPOINTS,
+                            KPT_OFFSET)
 
 # ------------------------------------------------------------
 # 配置参数
@@ -33,37 +36,6 @@ VISIBLE_OBSCURED = 1
 VISIBLE_MISSING = 0
 sampler.set_seed(42)
 
-# 类别名称（与 class_id = obj_type + light_color * 7 对应）
-# CLASS_NAMES = [
-#     "R_red", "light_red", "target_red", "arrow_red", "small_red", "inner_red", "outer_red",
-#     "R_blue", "light_blue", "target_blue", "arrow_blue", "small_blue", "inner_blue", "outer_blue"
-# ]
-CLASS_NAMES = [
-    "R_red", "target_red", "arrow_red", "small_activating_red", 
-    "R_blue", "target_blue", "arrow_blue", "small_activating_blue"
-]
-NUM_CLASSES = len(CLASS_NAMES)
-
-TYPE_TO_YOLO_CLASS = {
-    0 : 0,
-    2 : 1,
-    3 : 2,
-    4 : 3
-}
-
-FILTER_MAXNUMS = {
-    0 : 8,
-    1 : 9,
-    2 : 4,
-    3 : 11
-}
-# 各基础类别在全局关键点数组中的起始偏移
-_KPT_OFFSET = {}
-_offset = 0
-for _k in sorted(FILTER_MAXNUMS.keys()):
-    _KPT_OFFSET[_k] = _offset
-    _offset += FILTER_MAXNUMS[_k]
-TOTAL_KEYPOINTS = _offset  # 所有类别关键点总数
 
 # ------------------------------------------------------------
 def filter_and_pad_keypoints(xs: np.ndarray, ys: np.ndarray, indices: np.ndarray, valids: np.ndarray, occludeds: np.ndarray, obj_type: int) -> np.ndarray:
@@ -71,7 +43,7 @@ def filter_and_pad_keypoints(xs: np.ndarray, ys: np.ndarray, indices: np.ndarray
     c_ = TYPE_TO_YOLO_CLASS[obj_type]
     assert c_ in FILTER_MAXNUMS
     filter_maxnum = FILTER_MAXNUMS[c_]
-    offset = _KPT_OFFSET[c_]
+    offset = KPT_OFFSET[c_]
     padded = np.zeros((TOTAL_KEYPOINTS, 3), dtype=np.float32)
     for idx, x, y, valid, occluded in zip(indices, xs, ys, valids, occludeds):
         if idx >= filter_maxnum:

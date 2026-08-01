@@ -79,7 +79,7 @@ public:
 
         // ---------- 构建场景节点系统 ----------
         // 中心节点
-        rune_base_node = CreateSceneNode(scene, center_position.x, center_position.y, center_position.z, nullptr);
+        rune_base_node = CreateSceneNode(scene, center_position.x, center_position.y, center_position.z + 0.3328, nullptr);
         front_center_R_node = CreateSceneNode(scene, 0.0, 0.0, -0.3328-0.1664, rune_base_node);
         front_center_R_R_node = CreateImageNode(scene,
                                             center_R_R_tex_info.texture, center_R_R_tex_info.width, center_R_R_tex_info.height,
