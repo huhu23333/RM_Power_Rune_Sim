@@ -24,6 +24,12 @@ class KeypointGroup(ctypes.Structure):
         ("indices", ctypes.POINTER(ctypes.c_int)),
         ("xs", ctypes.POINTER(ctypes.c_float)),
         ("ys", ctypes.POINTER(ctypes.c_float)),
+        ("world_xs", ctypes.POINTER(ctypes.c_float)),
+        ("world_ys", ctypes.POINTER(ctypes.c_float)),
+        ("world_zs", ctypes.POINTER(ctypes.c_float)),
+        ("cam_xs", ctypes.POINTER(ctypes.c_float)),
+        ("cam_ys", ctypes.POINTER(ctypes.c_float)),
+        ("cam_zs", ctypes.POINTER(ctypes.c_float)),
         ("valids", ctypes.POINTER(ctypes.c_uint8)),
         ("occludeds", ctypes.POINTER(ctypes.c_uint8)),
     ]
@@ -222,12 +228,14 @@ class PowerRuneRenderer:
                     downsampled[i, j] = high_res_image[src_y, src_x]
         return downsampled
 
-    def render(self) -> Tuple[np.ndarray, List[Tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]:
+    def render(self):
         """
         渲染并返回：
-            - 图像：RGB? 实际为 RGBA，但混合背景后一般转为 BGR
-            - 关键点分组：每个分组的 (object_type, indices, xs, ys)
-              注意：关键点坐标已自动缩放到目标分辨率。
+            - 图像：RGBA uint8 (H,W,4)
+            - 关键点分组：每个分组的 (object_type, indices, xs, ys,
+              world_xs, world_ys, world_zs, cam_xs, cam_ys, cam_zs,
+              valids, occludeds)
+              注意：2D 坐标已自动缩放到目标分辨率，3D 坐标保持原值。
         """
         out_image = ctypes.c_void_p()
         out_w = ctypes.c_int()
@@ -251,7 +259,7 @@ class PowerRuneRenderer:
         # 降采样到目标分辨率
         final_image = self._downsample_image(high_res_image)
 
-        # 处理关键点：需要将坐标从超采样分辨率缩放到目标分辨率
+        # 处理关键点：2D坐标从超采样分辨率缩放到目标分辨率，3D坐标保持原值
         groups = []
         sf = self._super_sample_factor
         if out_num_groups.value > 0:
@@ -262,9 +270,18 @@ class PowerRuneRenderer:
                 indices = np.array([g.indices[j] for j in range(n)], dtype=np.int32)
                 xs = np.array([g.xs[j] / sf for j in range(n)], dtype=np.float32)
                 ys = np.array([g.ys[j] / sf for j in range(n)], dtype=np.float32)
+                world_xs = np.array([g.world_xs[j] for j in range(n)], dtype=np.float32)
+                world_ys = np.array([g.world_ys[j] for j in range(n)], dtype=np.float32)
+                world_zs = np.array([g.world_zs[j] for j in range(n)], dtype=np.float32)
+                cam_xs = np.array([g.cam_xs[j] for j in range(n)], dtype=np.float32)
+                cam_ys = np.array([g.cam_ys[j] for j in range(n)], dtype=np.float32)
+                cam_zs = np.array([g.cam_zs[j] for j in range(n)], dtype=np.float32)
                 valids = np.array([g.valids[j] for j in range(n)], dtype=np.uint8)
                 occludeds = np.array([g.occludeds[j] for j in range(n)], dtype=np.uint8)
-                groups.append((g.object_type, indices, xs, ys, valids, occludeds))
+                groups.append((g.object_type, indices, xs, ys,
+                               world_xs, world_ys, world_zs,
+                               cam_xs, cam_ys, cam_zs,
+                               valids, occludeds))
             self._lib.free_keypoint_groups(out_groups, out_num_groups)
 
         return final_image, groups

@@ -85,12 +85,26 @@ def filter_and_pad_keypoints(xs: np.ndarray, ys: np.ndarray, indices: np.ndarray
         padded[global_idx, 2] = VISIBLE_OBSCURED if invisible else VISIBLE_VALID
     return padded
 
+def extract_group_2d(group_tuple):
+    """
+    从新格式的 group 元组中提取 2D 关键点数据。
+    新格式: (object_type, indices, xs, ys, world_xs, world_ys, world_zs,
+             cam_xs, cam_ys, cam_zs, valids, occludeds)
+    旧格式: (object_type, indices, xs, ys, valids, occludeds)
+    """
+    obj_type, indices, xs, ys, \
+        world_xs, world_ys, world_zs, \
+        cam_xs, cam_ys, cam_zs, \
+        valids, occludeds = group_tuple
+    return obj_type, indices, xs, ys, valids, occludeds
+
 # ------------------------------------------------------------
-def groups_to_yolo_labels(groups: List[Tuple[int, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+def groups_to_yolo_labels(groups: List,
                           light_color: int,
                           img_width: int, img_height: int) -> List[str]:
     lines = []
-    for obj_type, indices, xs, ys, valids, occludeds in groups:
+    for group in groups:
+        obj_type, indices, xs, ys, valids, occludeds = group
         if len(xs) == 0:
             continue
 
@@ -140,7 +154,8 @@ def generate_sample(renderer, bg_sampler, split: str, sample_idx: int) -> None:
                              interpolation=cv2.INTER_LINEAR)
 
     scaled_groups = []
-    for obj_type, indices, xs, ys, valids, occludeds in groups:
+    for group in groups:
+        obj_type, indices, xs, ys, valids, occludeds = extract_group_2d(group)
         xs_scaled = xs * SCALE_X
         ys_scaled = ys * SCALE_Y
         scaled_groups.append((obj_type, indices, xs_scaled, ys_scaled, valids, occludeds))

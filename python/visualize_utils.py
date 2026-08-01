@@ -46,8 +46,10 @@ def draw_keypoints_opencv(image_bgr: np.ndarray,
         (128, 255, 0),   # 黄绿
     ]
 
-    for idx, (obj_type, indices, xs, ys, valids, occludeds) in enumerate(keypoints_groups):
-        # 为该物体选择颜色（基于物体索引循环取色）
+    for idx, group in enumerate(keypoints_groups):
+        obj_type, indices, xs, ys, \
+            _wx, _wy, _wz, _cx, _cy, _cz, \
+            valids, occludeds = group
         color = color_palette[idx % len(color_palette)]
 
         # 绘制包围框

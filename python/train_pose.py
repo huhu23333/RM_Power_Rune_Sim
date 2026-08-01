@@ -11,7 +11,7 @@ def train():
     if not os.path.exists(dataset_yaml):
         raise FileNotFoundError(f"Dataset yaml not found: {dataset_yaml}")
 
-    model = YOLO("yolo11n-pose.yaml")
+    model = YOLO("yolo26n-pose.yaml")
 
     # 训练参数（关键：禁用水平/垂直翻转）
     results = model.train(
@@ -24,8 +24,8 @@ def train():
         patience=50,
         save=True,
         project="power_rune_train",
-        name="power_rune_exp4",
-        # optimizer="AdamW",
+        name="power_rune_exp5",
+        optimizer="MuSGD", # optimizer="AdamW",
         # --------------------------------------------------
         # 禁用镜像翻转增强
         hsv_h= 0.1,

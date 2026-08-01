@@ -16,8 +16,14 @@ typedef struct {
     int object_type;       // 物体类型：0=R,1=light,2=target,3=arrow,4=small,5=inner,6=outer
     int num_keypoints;
     int* indices;          // 长度 num_keypoints，由接口分配，free_keypoint_groups 负责释放
-    float* xs;             // 像素 x 坐标
-    float* ys;             // 像素 y 坐标
+    float* xs;             // 像素 x 坐标（投影后 2D）
+    float* ys;             // 像素 y 坐标（投影后 2D）
+    float* world_xs;       // 全局坐标系 x 坐标（3D）
+    float* world_ys;       // 全局坐标系 y 坐标（3D）
+    float* world_zs;       // 全局坐标系 z 坐标（3D）
+    float* cam_xs;         // 相机坐标系 x 坐标（3D）
+    float* cam_ys;         // 相机坐标系 y 坐标（3D）
+    float* cam_zs;         // 相机坐标系 z 坐标（3D）
     uint8_t* valids;             // 是否在画面内
     uint8_t* occludeds;             // 是否被遮挡
 } KeypointGroup;
