@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <stdexcept>
+#include <string>
 #include <vector>
 #include <opencv2/core.hpp>
 
@@ -55,5 +57,67 @@ inline const std::vector<cv::Point3f> kps_small_activating = {
     { 0.059535f, -0.175000f, 0.000000f },
     { 0.147558f, -0.731186f, 0.000000f },
 };
+
+/// Struct returned by extract_keypoints()
+struct ExtractedKeypoints {
+    const std::vector<cv::Point3f>* world_keypoints;
+    std::vector<cv::Point2f>   image_keypoints;
+};
+
+/// Extract world keypoints and image-level keypoints for a given
+/// color-expanded type (0 .. 7) from the global
+/// all_keypoints vector (length = 32).
+/// Throws std::invalid_argument on invalid input.
+inline ExtractedKeypoints extract_keypoints(
+    int type,
+    const std::vector<cv::Point2f>& all_keypoints)
+{
+    if (type < 0 || type >= 8) {
+        throw std::invalid_argument(
+            "extract_keypoints: type " + std::to_string(type)
+            + " out of range [0, 8)");
+    }
+    if (all_keypoints.size() != 32) {
+        throw std::invalid_argument(
+            "extract_keypoints: all_keypoints.size() "
+            + std::to_string(all_keypoints.size())
+            + " != 32");
+    }
+
+    int yolo_cls = type % 4;
+    ExtractedKeypoints result;
+
+    switch (yolo_cls) {
+        case 0:
+            result.world_keypoints = &kps_R;
+            result.image_keypoints.assign(
+                all_keypoints.begin() + 0,
+                all_keypoints.begin() + 0 + 8);
+            break;
+        case 1:
+            result.world_keypoints = &kps_target;
+            result.image_keypoints.assign(
+                all_keypoints.begin() + 8,
+                all_keypoints.begin() + 8 + 9);
+            break;
+        case 2:
+            result.world_keypoints = &kps_arrow;
+            result.image_keypoints.assign(
+                all_keypoints.begin() + 17,
+                all_keypoints.begin() + 17 + 4);
+            break;
+        case 3:
+            result.world_keypoints = &kps_small_activating;
+            result.image_keypoints.assign(
+                all_keypoints.begin() + 21,
+                all_keypoints.begin() + 21 + 11);
+            break;
+        default:
+            throw std::invalid_argument(
+                "extract_keypoints: unexpected yolo_cls "
+                + std::to_string(yolo_cls));
+    }
+    return result;
+}
 
 }  // namespace power_rune_keypoints

@@ -11,7 +11,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from power_rune_client import PowerRuneRenderer
-from dataset_config import TYPE_TO_YOLO_CLASS, FILTER_MAXNUMS, CLASS_NAMES_BASE
+from dataset_config import (
+    TYPE_TO_YOLO_CLASS, FILTER_MAXNUMS, CLASS_NAMES_BASE,
+    KPT_OFFSET, TOTAL_KEYPOINTS, NUM_CLASSES,
+)
 
 # ---------------------------------------------------------------------------
 # 渲染分辨率（世界坐标与分辨率无关，取方便调试的值即可）
@@ -98,6 +101,8 @@ def _generate_cpp_header(all_kps, type_to_name):
     lines.append("")
     lines.append("#pragma once")
     lines.append("")
+    lines.append("#include <stdexcept>")
+    lines.append("#include <string>")
     lines.append("#include <vector>")
     lines.append("#include <opencv2/core.hpp>")
     lines.append("")
@@ -115,6 +120,86 @@ def _generate_cpp_header(all_kps, type_to_name):
             lines.append(f"    {{ {x:.6f}f, {y:.6f}f, {z:.6f}f }},")
         lines.append("};")
         lines.append("")
+
+    # -------------------------------------------------------------------
+    # 提取函数：根据颜色扩充后的 type 和全局关键点 vector 返回结构体
+    # -------------------------------------------------------------------
+    num_base = len(CLASS_NAMES_BASE)
+
+    lines.append("/// Struct returned by extract_keypoints()")
+    lines.append("struct ExtractedKeypoints {")
+    lines.append("    const std::vector<cv::Point3f>* world_keypoints;")
+    lines.append("    std::vector<cv::Point2f>   image_keypoints;")
+    lines.append("};")
+    lines.append("")
+    lines.append(
+        "/// Extract world keypoints and image-level keypoints for a given"
+    )
+    lines.append(
+        f"/// color-expanded type (0 .. {NUM_CLASSES - 1}) from the global"
+    )
+    lines.append(
+        f"/// all_keypoints vector (length = {TOTAL_KEYPOINTS})."
+    )
+    lines.append("/// Throws std::invalid_argument on invalid input.")
+    lines.append(
+        "inline ExtractedKeypoints extract_keypoints("
+    )
+    lines.append("    int type,")
+    lines.append("    const std::vector<cv::Point2f>& all_keypoints)")
+    lines.append("{")
+    lines.append(f"    if (type < 0 || type >= {NUM_CLASSES}) {{")
+    lines.append(f"        throw std::invalid_argument(")
+    lines.append(
+        f'            "extract_keypoints: type " + std::to_string(type)'
+    )
+    lines.append(
+        f'            + " out of range [0, {NUM_CLASSES})");'
+    )
+    lines.append("    }")
+    lines.append(
+        f"    if (all_keypoints.size() != {TOTAL_KEYPOINTS}) {{"
+    )
+    lines.append(f"        throw std::invalid_argument(")
+    lines.append(
+        '            "extract_keypoints: all_keypoints.size() "'
+    )
+    lines.append(
+        "            + std::to_string(all_keypoints.size())"
+    )
+    lines.append(
+        f'            + " != {TOTAL_KEYPOINTS}");'
+    )
+    lines.append("    }")
+    lines.append("")
+    lines.append(f"    int yolo_cls = type % {num_base};")
+    lines.append("    ExtractedKeypoints result;")
+    lines.append("")
+    lines.append("    switch (yolo_cls) {")
+    for yolo_cls in sorted(FILTER_MAXNUMS.keys()):
+        name = CLASS_NAMES_BASE[yolo_cls]
+        offset = KPT_OFFSET[yolo_cls]
+        count = FILTER_MAXNUMS[yolo_cls]
+        lines.append(f"        case {yolo_cls}:")
+        lines.append(f"            result.world_keypoints = &kps_{name};")
+        lines.append(f"            result.image_keypoints.assign(")
+        lines.append(
+            f"                all_keypoints.begin() + {offset},"
+        )
+        lines.append(
+            f"                all_keypoints.begin() + {offset} + {count});"
+        )
+        lines.append("            break;")
+    lines.append("        default:")
+    lines.append("            throw std::invalid_argument(")
+    lines.append(
+        '                "extract_keypoints: unexpected yolo_cls "'
+    )
+    lines.append("                + std::to_string(yolo_cls));")
+    lines.append("    }")
+    lines.append("    return result;")
+    lines.append("}")
+    lines.append("")
 
     lines.append("}  // namespace power_rune_keypoints")
     return "\n".join(lines)
