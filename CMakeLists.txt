@@ -18,6 +18,9 @@ add_subdirectory(third_party/SDL3)
 
 find_package(OpenCV REQUIRED)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale)
+
 # ===== 核心渲染库（动态库） =====
 add_library(render_core SHARED
     src/camera_projection.cpp
@@ -25,11 +28,13 @@ add_library(render_core SHARED
     src/scene_node.cpp
     src/file_utils.cpp
     src/render_utils.cpp
+    src/MkvWriter.cpp
 )
 
 target_link_libraries(render_core
     SDL3::SDL3
     ${OpenCV_LIBS}
+    ${FFMPEG_LIBRARIES}
 )
 
 if(WIN32)

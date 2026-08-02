@@ -5,16 +5,17 @@
 #include <file_utils.h>
 #include <render_utils.h>
 #include <power_rune.hpp>
+#include <MkvWriter.h>
 
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
-#include <vector>
-#include <algorithm>
-
 #include <cstring>
 #include <string>
-
+#include <vector>
+#include <algorithm>
+#include <memory>
+#include <ctime>
 
 // -----------------------------------------------------------------------------
 // 主函数
@@ -59,7 +60,7 @@ int main(int argc, char* argv[])
     }
     SDL_SetTextureBlendMode(offscreen, SDL_BLENDMODE_BLEND_PREMULTIPLIED);
 
-    // ---------- 3. 设置相机参数 ----------
+    // ---------- 2. 设置相机参数 ----------
     CameraIntrinsics intrinsics{
         1300, 1300,
         LOGICAL_WIDTH / 2.0, LOGICAL_HEIGHT / 2.0,
@@ -80,18 +81,38 @@ int main(int argc, char* argv[])
     Scene scene;
 
     std::unique_ptr<PowerRune> power_rune = std::make_unique<PowerRune>(renderer, scene, Point3D({0.0, -3.0, 3.0}), true);
-    
-    // 背景节点
 
-    // TextureInfo test_tex_info = LoadTextureFromPNG(renderer, "images/results/test.png");
-    // ImageNode* front_node = CreateImageNode(scene,
-    //                 test_tex_info.texture, test_tex_info.width, test_tex_info.height,
-    //                 2560.0 * 5e-3, 1440.0 * 5e-3,
-    //                 0.0, 0.0, 5,
-    //                 1.0f,
-    //                 {}, nullptr, -1);
+    // ---------- 3. 视频输出设置 ----------
+    const int VID_WIDTH = 1920;
+    const int VID_HEIGHT = 1080;
+    const double VID_FPS = 30.0;
 
-    // ---------- 5. 控制状态 ----------
+    std::unique_ptr<MkvAllIntraWriter> video_writer;
+    uint64_t video_start_ticks = 0;
+    int video_frame_index = 0;
+    bool video_enabled = true;
+
+    if (video_enabled) {
+        video_writer = std::make_unique<MkvAllIntraWriter>(60);
+        std::time_t now = std::time(nullptr);
+        std::tm* local_tm = std::localtime(&now);
+        char timestamp[32];
+        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", local_tm);
+        char video_filename[256];
+        std::snprintf(video_filename, sizeof(video_filename),
+                      "screenshot/demo_video_%s.mkv", timestamp);
+        if (!video_writer->open(video_filename, VID_WIDTH, VID_HEIGHT, VID_FPS, 8000000)) {
+            SDL_Log("Failed to open video writer, video output disabled");
+            video_writer.reset();
+            video_enabled = false;
+        } else {
+            SDL_Log("Video output enabled: %s (%dx%d @ %.1f fps)",
+                    video_filename, VID_WIDTH, VID_HEIGHT, VID_FPS);
+            video_start_ticks = SDL_GetTicks();
+        }
+    }
+
+    // ---------- 4. 控制状态 ----------
     bool mouse_grabbed = false;
     CameraPose camera_pose{
         Point3D({0.0, 0.0, 0.0}),
@@ -116,7 +137,7 @@ int main(int argc, char* argv[])
     double flowing_arrow_speed = 1.0;
     double flowing_arrow_offset = 0.0;
 
-    // ---------- 6. 主循环 ----------
+    // ---------- 5. 主循环 ----------
     SDL_Event event{};
     bool keep_going = true;
     int frame_count = 0;
@@ -139,7 +160,11 @@ int main(int argc, char* argv[])
         if (dt > 0.05f) dt = 0.05f;
 
         if (current_ticks - fps_last_ticks >= 1000) {
-            SDL_Log("FPS: %d", frame_count);
+            size_t queue_size = 0;
+            if (video_writer) {
+                queue_size = video_writer->getQueueSize();
+            }
+            SDL_Log("FPS: %d | Video Queue: %zu", frame_count, queue_size);
             frame_count = 0;
             fps_last_ticks = current_ticks;
         }
@@ -255,11 +280,11 @@ int main(int argc, char* argv[])
                     power_rune -> SetFanBigActivatingRatio(0, show_fan_light_ratio, show_fan_light_ratio);
                 }
                 break;
-            
+
             default:
                 break;
         }
-        
+
         flowing_arrow_offset += dt * flowing_arrow_speed;
         flowing_arrow_offset = flowing_arrow_offset - std::floor(flowing_arrow_offset);
         power_rune -> SetFlowingArrowOffset(0, flowing_arrow_offset);
@@ -291,14 +316,11 @@ int main(int argc, char* argv[])
         BeginOffscreenRender(renderer, offscreen);
 
         // ---- Step 1.5: 关键点计算 ----
-        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints 
+        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints
             = power_rune -> getShownKeypoints(intrinsics, distortion, camera_pose);
 
         // ---- Step 2: 渲染场景节点 ----
-        // fan_node_groups[0].target_node->Render(renderer, intrinsics, distortion, camera_pose);
         scene.RenderAll(renderer, intrinsics, distortion, camera_pose, keypoints);
-
-        // SDL_FlushRenderer(renderer);
 
         // ---- Step 3: 绘制十字丝 ----
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
@@ -312,18 +334,86 @@ int main(int argc, char* argv[])
             };
         }
 
-        // ---- Step 5: 截图 ----
+        // ---- Step 5: 视频帧写入（异步，与渲染并行） ----
+        if (video_writer) {
+            double video_elapsed = (current_ticks - video_start_ticks) / 1000.0;
+            int expected_frame_index = (int)(video_elapsed * VID_FPS);
+            if (expected_frame_index > video_frame_index) {
+                // 捕获离屏渲染内容
+                SDL_Surface* frame_surface = SDL_RenderReadPixels(renderer, nullptr);
+                if (frame_surface) {
+                    // 转换为 OpenCV Mat (RGBA → BGR，并缩放到视频分辨率)
+                    cv::Mat rgba_mat(frame_surface->h, frame_surface->w, CV_8UC4,
+                                     frame_surface->pixels, static_cast<size_t>(frame_surface->pitch));
+                    cv::Mat bgr_mat;
+                    cv::cvtColor(rgba_mat, bgr_mat, cv::COLOR_RGBA2BGR);
+                    // 缩放至视频分辨率
+                    if (frame_surface->w != VID_WIDTH || frame_surface->h != VID_HEIGHT) {
+                        cv::resize(bgr_mat, bgr_mat, cv::Size(VID_WIDTH, VID_HEIGHT), 0, 0, cv::INTER_LINEAR);
+                    }
+                    // 异步写入（丢弃模式：队列满时丢弃该帧）
+                    video_writer->writeFrame(bgr_mat, true);
+                    video_frame_index = expected_frame_index;
+                    SDL_DestroySurface(frame_surface);
+                }
+            }
+        }
+
+        // ---- Step 6: 截图 ----
         if (screenshot_requested) {
             screenshot_requested = false;
             SaveScreenshot(renderer, "screenshot/demo_screenshot");
         }
 
-        // ---- Step 6: 呈现到窗口 ----
+        // ---- Step 7: 呈现到窗口 ----
         PresentOffscreenToWindow(renderer, offscreen,
                                  LOGICAL_WIDTH, LOGICAL_HEIGHT);
     }
 
-    // ---------- 7. 清理 ----------
+    // ---------- 6. 清理视频写入器 ----------
+    if (video_writer) {
+        SDL_Log("Closing video writer...");
+        video_writer->close();
+        video_writer.reset();
+    }
+
+    // ---------- 7. 计算视频对应的相机参数 ----------
+    if (video_enabled) {
+        double scale_x = (double)VID_WIDTH / (double)LOGICAL_WIDTH;
+        double scale_y = (double)VID_HEIGHT / (double)LOGICAL_HEIGHT;
+
+        CameraIntrinsics video_intrinsics{
+            intrinsics.fx * scale_x,
+            intrinsics.fy * scale_y,
+            intrinsics.cx * scale_x,
+            intrinsics.cy * scale_y,
+            VID_WIDTH,
+            VID_HEIGHT
+        };
+
+        // 畸变系数不随分辨率缩放而变化
+        DistortionCoefficients video_distortion = distortion;
+
+        SDL_Log("========== 视频相机参数 ==========");
+        SDL_Log("渲染分辨率: %d x %d", LOGICAL_WIDTH, LOGICAL_HEIGHT);
+        SDL_Log("视频分辨率: %d x %d", VID_WIDTH, VID_HEIGHT);
+        SDL_Log("缩放因子: scale_x = %.6f, scale_y = %.6f", scale_x, scale_y);
+        SDL_Log("--- 视频相机内参 ---");
+        SDL_Log("  fx = %.6f", video_intrinsics.fx);
+        SDL_Log("  fy = %.6f", video_intrinsics.fy);
+        SDL_Log("  cx = %.6f", video_intrinsics.cx);
+        SDL_Log("  cy = %.6f", video_intrinsics.cy);
+        SDL_Log("  width = %d, height = %d", video_intrinsics.width, video_intrinsics.height);
+        SDL_Log("--- 视频畸变系数 ---");
+        SDL_Log("  k1 = %.6f", video_distortion.k1);
+        SDL_Log("  k2 = %.6f", video_distortion.k2);
+        SDL_Log("  p1 = %.6f", video_distortion.p1);
+        SDL_Log("  p2 = %.6f", video_distortion.p2);
+        SDL_Log("  k3 = %.6f", video_distortion.k3);
+        SDL_Log("==================================");
+    }
+
+    // ---------- 8. 清理 ----------
     if (mouse_grabbed) {
         SDL_SetWindowRelativeMouseMode(window, false);
     }
