@@ -92,6 +92,18 @@ int main(int argc, char* argv[])
     int video_frame_index = 0;
     bool video_enabled = true;
 
+    // 视频合成用离屏纹理（背景色 + 缩放的离屏内容 = 最终显示画面）
+    SDL_Texture* video_compose_tex = nullptr;
+    if (video_enabled) {
+        video_compose_tex = SDL_CreateTexture(
+            renderer, SDL_PIXELFORMAT_RGBA32,
+            SDL_TEXTUREACCESS_TARGET, VID_WIDTH, VID_HEIGHT);
+        if (!video_compose_tex) {
+            SDL_Log("Create video compose texture failed: %s", SDL_GetError());
+            video_enabled = false;
+        }
+    }
+
     if (video_enabled) {
         video_writer = std::make_unique<MkvAllIntraWriter>(60);
         std::time_t now = std::time(nullptr);
@@ -111,6 +123,9 @@ int main(int argc, char* argv[])
             video_start_ticks = SDL_GetTicks();
         }
     }
+
+    // 视频合成背景色（与 PresentOffscreenToWindow 保持一致）
+    const SDL_FColor video_bg_color = { 16.0f/255.0f, 16.0f/255.0f, 32.0f/255.0f, 1.0f };
 
     // ---------- 4. 控制状态 ----------
     bool mouse_grabbed = false;
@@ -339,18 +354,42 @@ int main(int argc, char* argv[])
             double video_elapsed = (current_ticks - video_start_ticks) / 1000.0;
             int expected_frame_index = (int)(video_elapsed * VID_FPS);
             if (expected_frame_index > video_frame_index) {
-                // 捕获离屏渲染内容
+                // 合成视频帧：背景色 + 缩放离屏内容 = 最终显示画面
+                // 与 PresentOffscreenToWindow 的逻辑一致（但不加 letterbox，直接填充整个纹理）
+                SDL_Texture* prev_target = SDL_GetRenderTarget(renderer);
+                SDL_SetRenderTarget(renderer, video_compose_tex);
+
+                // 填充背景色
+                SDL_SetRenderDrawColor(renderer,
+                    (uint8_t)(video_bg_color.r * 255),
+                    (uint8_t)(video_bg_color.g * 255),
+                    (uint8_t)(video_bg_color.b * 255),
+                    (uint8_t)(video_bg_color.a * 255));
+                SDL_RenderClear(renderer);
+
+                // 将离屏内容缩放到整个视频纹理
+                float scale = SDL_min(
+                    (float)VID_WIDTH / (float)LOGICAL_WIDTH,
+                    (float)VID_HEIGHT / (float)LOGICAL_HEIGHT);
+                float dst_w = (float)LOGICAL_WIDTH * scale;
+                float dst_h = (float)LOGICAL_HEIGHT * scale;
+                SDL_FRect dst_rect = {
+                    ((float)VID_WIDTH - dst_w) / 2.0f,
+                    ((float)VID_HEIGHT - dst_h) / 2.0f,
+                    dst_w, dst_h
+                };
+                SDL_RenderTexture(renderer, offscreen, nullptr, &dst_rect);
+
+                // 读取合成后的像素
                 SDL_Surface* frame_surface = SDL_RenderReadPixels(renderer, nullptr);
+                SDL_SetRenderTarget(renderer, prev_target);
+
                 if (frame_surface) {
-                    // 转换为 OpenCV Mat (RGBA → BGR，并缩放到视频分辨率)
+                    // 转换为 OpenCV Mat (RGBA → BGR)
                     cv::Mat rgba_mat(frame_surface->h, frame_surface->w, CV_8UC4,
                                      frame_surface->pixels, static_cast<size_t>(frame_surface->pitch));
                     cv::Mat bgr_mat;
                     cv::cvtColor(rgba_mat, bgr_mat, cv::COLOR_RGBA2BGR);
-                    // 缩放至视频分辨率
-                    if (frame_surface->w != VID_WIDTH || frame_surface->h != VID_HEIGHT) {
-                        cv::resize(bgr_mat, bgr_mat, cv::Size(VID_WIDTH, VID_HEIGHT), 0, 0, cv::INTER_LINEAR);
-                    }
                     // 异步写入（丢弃模式：队列满时丢弃该帧）
                     video_writer->writeFrame(bgr_mat, true);
                     video_frame_index = expected_frame_index;
@@ -418,6 +457,9 @@ int main(int argc, char* argv[])
         SDL_SetWindowRelativeMouseMode(window, false);
     }
     power_rune.reset();
+    if (video_compose_tex) {
+        SDL_DestroyTexture(video_compose_tex);
+    }
     SDL_DestroyTexture(offscreen);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
