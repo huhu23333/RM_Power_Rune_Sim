@@ -16,12 +16,21 @@
 #include <algorithm>
 #include <memory>
 #include <ctime>
+#include <random>
 
 // -----------------------------------------------------------------------------
 // 主函数
 // -----------------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
+    // ---------- 0. 参数解析 ----------
+    bool video_enabled = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--video") == 0) {
+            video_enabled = true;
+        }
+    }
+
     // ---------- 1. SDL 初始化 ----------
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_VERBOSE);
 
@@ -90,7 +99,6 @@ int main(int argc, char* argv[])
     std::unique_ptr<MkvAllIntraWriter> video_writer;
     uint64_t video_start_ticks = 0;
     int video_frame_index = 0;
-    bool video_enabled = true;
 
     // 视频合成用离屏纹理（背景色 + 缩放的离屏内容 = 最终显示画面）
     SDL_Texture* video_compose_tex = nullptr;
@@ -144,15 +152,51 @@ int main(int argc, char* argv[])
     bool screenshot_requested = false;
 
     bool show_keypoints = false;
-    int show_light_type = 0;
+    int current_mode = 0;          // 0, 1, 2
 
-    double rune_roll_speed = 1.5;
+    double rune_roll_speed = M_PI / 3.0;
     double rune_roll_rad = 0.0;
 
     double flowing_arrow_speed = 1.0;
     double flowing_arrow_offset = 0.0;
 
-    // ---------- 5. 主循环 ----------
+    // ---------- 模式相关状态 ----------
+    // Mode 1
+    double mode1_timer = 0.0;
+    enum class Mode1Phase { ACTIVATE, WAIT_ALL_ZERO, COOLDOWN };
+    Mode1Phase mode1_phase = Mode1Phase::ACTIVATE;
+    int mode1_current_fan = -1;
+    std::vector<int> mode1_fan_states; // 0=idle, 1=active, 2=done
+    double mode1_phase_timer = 0.0;
+
+    // Mode 2
+    double mode2_t = 0.0;           // 进入模式2后的累计时间
+    double mode2_a = 0.913;         // 默认 a
+    double mode2_omega = 1.942;     // 默认 ω
+    double mode2_b = 2.090 - mode2_a;
+    double mode2_param_timer = 0.0; // 参数刷新周期计时
+    enum class Mode2Phase { WAIT_1, WAIT_2, WAIT_3, ALL_ZERO_COOLDOWN };
+    Mode2Phase mode2_phase = Mode2Phase::WAIT_1;
+    double mode2_phase_timer = 0.0;
+    double mode2_ratio = 0.0;
+    int mode2_fan1 = -1;
+    int mode2_fan2 = -1;
+
+    // 随机数生成器
+    std::mt19937 rng(42);
+    std::uniform_real_distribution<double> dist_a(0.780, 1.045);
+    std::uniform_real_distribution<double> dist_omega(1.884, 2.000);
+
+    // Mode 2 文字显示
+    SDL_Texture* mode2_text_tex = nullptr;
+    int mode2_text_w = 0, mode2_text_h = 0;
+
+    // ---------- 5. 初始化模式0默认状态 ----------
+    for (int i = 0; i < 5; i++) {
+        power_rune->SetFanState(i, 0);
+    }
+
+    // ---------- 6. 主循环 ----------
     SDL_Event event{};
     bool keep_going = true;
     int frame_count = 0;
@@ -162,7 +206,8 @@ int main(int argc, char* argv[])
     SDL_Log("WASD: move | SPACE: up | SHIFT: down | ESC: release/quit");
     SDL_Log("Q/E: roll camera | R: reset roll");
     SDL_Log("M: toggle keypoints | P: screenshot");
-    SDL_Log("C: change light type");
+    SDL_Log("C: change mode (0/1/2)");
+    SDL_Log("--video: enable video output");
 
     uint64_t prev_ticks = SDL_GetTicks();
 
@@ -179,7 +224,7 @@ int main(int argc, char* argv[])
             if (video_writer) {
                 queue_size = video_writer->getQueueSize();
             }
-            SDL_Log("FPS: %d | Video Queue: %zu", frame_count, queue_size);
+            SDL_Log("FPS: %d | Mode: %d | Video Queue: %zu", frame_count, current_mode, queue_size);
             frame_count = 0;
             fps_last_ticks = current_ticks;
         }
@@ -223,10 +268,51 @@ int main(int argc, char* argv[])
                     break;
                 case SDLK_C:
                     if (event.key.repeat == 0) {
-                        if (show_light_type == 8) {
-                            show_light_type = 0;
+                        current_mode = (current_mode + 1) % 3;
+                        SDL_Log("Mode switched to: %d", current_mode);
+
+                        // 初始化模式状态
+                        if (current_mode == 1) {
+                            rune_roll_speed = M_PI / 3.0;
+                            mode1_timer = 0.0;
+                            mode1_phase = Mode1Phase::ACTIVATE;
+                            mode1_fan_states.assign(5, 0);
+                            int r = std::uniform_int_distribution<int>(0, 4)(rng);
+                            mode1_current_fan = r;
+                            mode1_fan_states[r] = 1;
+                            mode1_phase_timer = 0.0;
+                            // 只显示激活的扇叶
+                            for (int i = 0; i < 5; i++) {
+                                power_rune->SetFanState(i, (i == r) ? 1 : 0);
+                            }
+                        } else if (current_mode == 2) {
+                            mode2_t = 0.0;
+                            mode2_a = dist_a(rng);
+                            mode2_omega = dist_omega(rng);
+                            mode2_b = 2.090 - mode2_a;
+                            mode2_param_timer = 0.0;
+                            mode2_phase = Mode2Phase::WAIT_1;
+                            mode2_phase_timer = 0.0;
+                            mode2_ratio = 0.0;
+
+                            // 全部设为4
+                            for (int i = 0; i < 5; i++) {
+                                power_rune->SetFanState(i, 4);
+                                power_rune->SetFanBigActivatingRatio(i, 0.0, 0.0);
+                            }
+                            // 随机两个扇形设为1
+                            mode2_fan1 = std::uniform_int_distribution<int>(0, 4)(rng);
+                            do {
+                                mode2_fan2 = std::uniform_int_distribution<int>(0, 4)(rng);
+                            } while (mode2_fan2 == mode2_fan1);
+                            power_rune->SetFanState(mode2_fan1, 1);
+                            power_rune->SetFanState(mode2_fan2, 1);
                         } else {
-                            show_light_type += 1;
+                            // Mode 0
+                            rune_roll_speed = M_PI / 3.0;
+                            for (int i = 0; i < 5; i++) {
+                                power_rune->SetFanState(i, 0);
+                            }
                         }
                     }
                     break;
@@ -272,37 +358,179 @@ int main(int argc, char* argv[])
         }
 
         // ---------- 节点位置变换 ----------
+        if (current_mode == 2) {
+            mode2_t += dt;
+            rune_roll_speed = mode2_a * std::sin(mode2_omega * mode2_t) + mode2_b;
+
+            // 每30秒随机更新参数
+            mode2_param_timer += dt;
+            if (mode2_param_timer >= 30.0) {
+                mode2_param_timer -= 30.0;
+                mode2_a = dist_a(rng);
+                mode2_omega = dist_omega(rng);
+                mode2_b = 2.090 - mode2_a;
+            }
+        }
         rune_roll_rad += rune_roll_speed * dt;
         power_rune -> SetRotateAngle(rune_roll_rad);
 
-        // ---------- 图像更新 ----------
-        switch (show_light_type)
-        {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
-                power_rune -> SetFanState(0, show_light_type);
-                break;
-            case 4:
-            case 5:
-            case 6:
-            case 7:
-            case 8:
-                {
-                    double show_fan_light_ratio = (double)(show_light_type - 3) / 5.0;
-                    power_rune -> SetFanState(0, 4);
-                    power_rune -> SetFanBigActivatingRatio(0, show_fan_light_ratio, show_fan_light_ratio);
-                }
-                break;
+        // ---------- 模式逻辑更新 ----------
+        if (current_mode == 0) {
+            // 模式0: 全部扇叶状态为0
+            for (int i = 0; i < 5; i++) {
+                power_rune->SetFanState(i, 0);
+            }
+            rune_roll_speed = M_PI / 3.0;
+        } else if (current_mode == 1) {
+            // 模式1
+            rune_roll_speed = M_PI / 3.0;
+            mode1_timer += dt;
 
-            default:
-                break;
+            if (mode1_phase == Mode1Phase::ACTIVATE) {
+                mode1_phase_timer += dt;
+                if (mode1_phase_timer >= 1.5) {
+                    // 将当前扇叶状态变为2
+                    power_rune->SetFanState(mode1_current_fan, 2);
+                    mode1_fan_states[mode1_current_fan] = 2;
+                    mode1_phase_timer = 0.0;
+
+                    // 检查是否所有扇叶都非0
+                    bool all_done = true;
+                    for (int i = 0; i < 5; i++) {
+                        if (mode1_fan_states[i] == 0) {
+                            all_done = false;
+                            break;
+                        }
+                    }
+                    if (all_done) {
+                        mode1_phase = Mode1Phase::WAIT_ALL_ZERO;
+                        mode1_phase_timer = 0.0;
+                    } else {
+                        // 随机选择另一个状态为0的扇叶变为1
+                        std::vector<int> candidates;
+                        for (int i = 0; i < 5; i++) {
+                            if (mode1_fan_states[i] == 0) candidates.push_back(i);
+                        }
+                        int next = candidates[std::uniform_int_distribution<int>(0, (int)candidates.size() - 1)(rng)];
+                        mode1_current_fan = next;
+                        mode1_fan_states[next] = 1;
+                        power_rune->SetFanState(next, 1);
+                    }
+                }
+            } else if (mode1_phase == Mode1Phase::WAIT_ALL_ZERO) {
+                mode1_phase_timer += dt;
+                if (mode1_phase_timer >= 1.5) {
+                    // 全部扇叶状态变为0
+                    for (int i = 0; i < 5; i++) {
+                        power_rune->SetFanState(i, 0);
+                        mode1_fan_states[i] = 0;
+                    }
+                    mode1_phase = Mode1Phase::COOLDOWN;
+                    mode1_phase_timer = 0.0;
+                }
+            } else { // COOLDOWN
+                mode1_phase_timer += dt;
+                if (mode1_phase_timer >= 2.5) {
+                    // 重新开始循环
+                    mode1_phase = Mode1Phase::ACTIVATE;
+                    mode1_phase_timer = 0.0;
+                    mode1_fan_states.assign(5, 0);
+                    int r = std::uniform_int_distribution<int>(0, 4)(rng);
+                    mode1_current_fan = r;
+                    mode1_fan_states[r] = 1;
+                    power_rune->SetFanState(r, 1);
+                    for (int i = 0; i < 5; i++) {
+                        if (i != r) power_rune->SetFanState(i, 0);
+                    }
+                }
+            }
+        } else if (current_mode == 2) {
+            // 模式2 扇叶激活循环
+            mode2_phase_timer += dt;
+
+            if (mode2_phase == Mode2Phase::WAIT_1) {
+                if (mode2_phase_timer >= 1.5) {
+                    mode2_phase_timer = 0.0;
+                    // 将其中一个状态为1的扇叶变为4
+                    power_rune->SetFanState(mode2_fan1, 4);
+                    mode2_phase = Mode2Phase::WAIT_2;
+                }
+            } else if (mode2_phase == Mode2Phase::WAIT_2) {
+                if (mode2_phase_timer >= 0.5) {
+                    mode2_phase_timer = 0.0;
+                    // 将另一个状态为1的扇叶也变为4
+                    power_rune->SetFanState(mode2_fan2, 4);
+                    mode2_phase = Mode2Phase::WAIT_3;
+                }
+            } else if (mode2_phase == Mode2Phase::WAIT_3) {
+                if (mode2_phase_timer >= 0.5) {
+                    mode2_phase_timer = 0.0;
+                    // 更新比例
+                    mode2_ratio += 0.2;
+                    if (mode2_ratio > 1.0) {
+                        mode2_ratio = 0.0;
+                        // 比例回绕到0.0时，进入全0冷却阶段
+                        for (int i = 0; i < 5; i++) {
+                            power_rune->SetFanState(i, 0);
+                        }
+                        mode2_phase = Mode2Phase::ALL_ZERO_COOLDOWN;
+                    } else {
+                        // 全部设为4并设置比例
+                        for (int i = 0; i < 5; i++) {
+                            power_rune->SetFanState(i, 4);
+                            power_rune->SetFanBigActivatingRatio(i, mode2_ratio, mode2_ratio);
+                        }
+                        // 随机两个扇叶变为1
+                        mode2_fan1 = std::uniform_int_distribution<int>(0, 4)(rng);
+                        do {
+                            mode2_fan2 = std::uniform_int_distribution<int>(0, 4)(rng);
+                        } while (mode2_fan2 == mode2_fan1);
+                        power_rune->SetFanState(mode2_fan1, 1);
+                        power_rune->SetFanState(mode2_fan2, 1);
+                        mode2_phase = Mode2Phase::WAIT_1;
+                    }
+                }
+            } else { // ALL_ZERO_COOLDOWN
+                mode2_phase_timer += dt;
+                if (mode2_phase_timer >= 2.5) {
+                    mode2_phase_timer = 0.0;
+                    // 全部设为4并设置比例（ratio已经是0.0）
+                    for (int i = 0; i < 5; i++) {
+                        power_rune->SetFanState(i, 4);
+                        power_rune->SetFanBigActivatingRatio(i, mode2_ratio, mode2_ratio);
+                    }
+                    // 随机两个扇叶变为1
+                    mode2_fan1 = std::uniform_int_distribution<int>(0, 4)(rng);
+                    do {
+                        mode2_fan2 = std::uniform_int_distribution<int>(0, 4)(rng);
+                    } while (mode2_fan2 == mode2_fan1);
+                    power_rune->SetFanState(mode2_fan1, 1);
+                    power_rune->SetFanState(mode2_fan2, 1);
+                    mode2_phase = Mode2Phase::WAIT_1;
+                }
+            }
+
+            // 更新模式2文字纹理
+            char mode2_text[256];
+            std::snprintf(mode2_text, sizeof(mode2_text),
+                "Mode 2 | a=%.4f  w=%.4f  b=%.4f  ratio=%.1f  speed=%.2f rad/s",
+                mode2_a, mode2_omega, mode2_b, mode2_ratio, rune_roll_speed);
+            if (mode2_text_tex) SDL_DestroyTexture(mode2_text_tex);
+            mode2_text_tex = RenderTextToTexture(renderer, mode2_text,
+                { 0.0f, 1.0f, 0.0f, 1.0f }, 1.5, 3);
+            if (mode2_text_tex) {
+                float tw, th;
+                SDL_GetTextureSize(mode2_text_tex, &tw, &th);
+                mode2_text_w = (int)tw;
+                mode2_text_h = (int)th;
+            }
         }
 
         flowing_arrow_offset += dt * flowing_arrow_speed;
         flowing_arrow_offset = flowing_arrow_offset - std::floor(flowing_arrow_offset);
-        power_rune -> SetFlowingArrowOffset(0, flowing_arrow_offset);
+        for (int i = 0; i < 5; i++) {
+            power_rune -> SetFlowingArrowOffset(i, flowing_arrow_offset);
+        }
 
         // ---------- 摄像机移动 ----------
         double wf_x = std::sin(camera_pose.yaw);
@@ -339,6 +567,17 @@ int main(int argc, char* argv[])
 
         // ---- Step 3: 绘制十字丝 ----
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
+
+        // ---- Step 3.5: 绘制模式2文字（右下角） ----
+        if (current_mode == 2 && mode2_text_tex) {
+            SDL_FRect text_rect = {
+                (float)LOGICAL_WIDTH - (float)mode2_text_w - 20.0f,
+                (float)LOGICAL_HEIGHT - (float)mode2_text_h - 20.0f,
+                (float)mode2_text_w,
+                (float)mode2_text_h
+            };
+            SDL_RenderTexture(renderer, mode2_text_tex, nullptr, &text_rect);
+        }
 
         // ---- Step 4: 关键点渲染 ----
         if (show_keypoints) {
@@ -409,14 +648,14 @@ int main(int argc, char* argv[])
                                  LOGICAL_WIDTH, LOGICAL_HEIGHT);
     }
 
-    // ---------- 6. 清理视频写入器 ----------
+    // ---------- 7. 清理视频写入器 ----------
     if (video_writer) {
         SDL_Log("Closing video writer...");
         video_writer->close();
         video_writer.reset();
     }
 
-    // ---------- 7. 计算视频对应的相机参数 ----------
+    // ---------- 8. 计算视频对应的相机参数 ----------
     if (video_enabled) {
         double scale_x = (double)VID_WIDTH / (double)LOGICAL_WIDTH;
         double scale_y = (double)VID_HEIGHT / (double)LOGICAL_HEIGHT;
@@ -452,7 +691,10 @@ int main(int argc, char* argv[])
         SDL_Log("==================================");
     }
 
-    // ---------- 8. 清理 ----------
+    // ---------- 9. 清理 ----------
+    if (mode2_text_tex) {
+        SDL_DestroyTexture(mode2_text_tex);
+    }
     if (mouse_grabbed) {
         SDL_SetWindowRelativeMouseMode(window, false);
     }
