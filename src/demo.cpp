@@ -191,6 +191,10 @@ int main(int argc, char* argv[])
     SDL_Texture* mode2_text_tex = nullptr;
     int mode2_text_w = 0, mode2_text_h = 0;
 
+    // 相机位姿文字显示（始终显示在屏幕最后一行）
+    SDL_Texture* camera_text_tex = nullptr;
+    int camera_text_w = 0, camera_text_h = 0;
+
     // ---------- 5. 初始化模式0默认状态 ----------
     for (int i = 0; i < 5; i++) {
         power_rune->SetFanState(i, 0);
@@ -548,6 +552,24 @@ int main(int argc, char* argv[])
         if (key_q) camera_pose.roll += cam_roll_speed * dt;
         if (key_e) camera_pose.roll -= cam_roll_speed * dt;
 
+        // 更新相机位姿文字纹理（始终显示，所有模式）
+        {
+            char camera_text[256];
+            std::snprintf(camera_text, sizeof(camera_text),
+                "Pos: (%.2f, %.2f, %.2f)  Yaw: %.2f  Pitch: %.2f  Roll: %.2f",
+                camera_pose.position.x, camera_pose.position.y, camera_pose.position.z,
+                camera_pose.yaw, camera_pose.pitch, camera_pose.roll);
+            if (camera_text_tex) SDL_DestroyTexture(camera_text_tex);
+            camera_text_tex = RenderTextToTexture(renderer, camera_text,
+                { 1.0f, 1.0f, 1.0f, 1.0f }, 1.5, 3);
+            if (camera_text_tex) {
+                float tw, th;
+                SDL_GetTextureSize(camera_text_tex, &tw, &th);
+                camera_text_w = (int)tw;
+                camera_text_h = (int)th;
+            }
+        }
+
         // 更新所有场景节点的世界变换矩阵
         scene.UpdateAllTransforms();
 
@@ -559,8 +581,8 @@ int main(int argc, char* argv[])
         BeginOffscreenRender(renderer, offscreen);
 
         // ---- Step 1.5: 关键点计算 ----
-        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints
-            = power_rune -> getShownKeypoints(intrinsics, distortion, camera_pose);
+        std::vector<std::pair<KeypointExtraInfos, std::vector<KeypointProjection>>> keypoints;
+        if (show_keypoints) keypoints = power_rune -> getShownKeypoints(intrinsics, distortion, camera_pose);
 
         // ---- Step 2: 渲染场景节点 ----
         scene.RenderAll(renderer, intrinsics, distortion, camera_pose, keypoints);
@@ -568,11 +590,23 @@ int main(int argc, char* argv[])
         // ---- Step 3: 绘制十字丝 ----
         DrawCrosshair(renderer, (float)intrinsics.cx, (float)intrinsics.cy);
 
-        // ---- Step 3.5: 绘制模式2文字（右下角） ----
+        // ---- Step 3.6: 绘制相机位姿文字（右下角，最后一行） ----
+        if (camera_text_tex) {
+            SDL_FRect text_rect = {
+                (float)LOGICAL_WIDTH - (float)camera_text_w - 20.0f,
+                (float)LOGICAL_HEIGHT - (float)camera_text_h - 20.0f,
+                (float)camera_text_w,
+                (float)camera_text_h
+            };
+            SDL_RenderTexture(renderer, camera_text_tex, nullptr, &text_rect);
+        }
+
+        // ---- Step 3.5: 绘制模式2文字（右下角，倒数第二行） ----
         if (current_mode == 2 && mode2_text_tex) {
+            float extra_offset = camera_text_tex ? (float)camera_text_h + 10.0f : 0.0f;
             SDL_FRect text_rect = {
                 (float)LOGICAL_WIDTH - (float)mode2_text_w - 20.0f,
-                (float)LOGICAL_HEIGHT - (float)mode2_text_h - 20.0f,
+                (float)LOGICAL_HEIGHT - (float)mode2_text_h - 20.0f - extra_offset,
                 (float)mode2_text_w,
                 (float)mode2_text_h
             };
@@ -694,6 +728,9 @@ int main(int argc, char* argv[])
     // ---------- 9. 清理 ----------
     if (mode2_text_tex) {
         SDL_DestroyTexture(mode2_text_tex);
+    }
+    if (camera_text_tex) {
+        SDL_DestroyTexture(camera_text_tex);
     }
     if (mouse_grabbed) {
         SDL_SetWindowRelativeMouseMode(window, false);
