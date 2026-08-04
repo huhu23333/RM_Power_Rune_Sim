@@ -460,14 +460,14 @@ int main(int argc, char* argv[])
                     mode2_phase = Mode2Phase::WAIT_2;
                 }
             } else if (mode2_phase == Mode2Phase::WAIT_2) {
-                if (mode2_phase_timer >= 0.5) {
+                if (mode2_phase_timer >= 0.8) {
                     mode2_phase_timer = 0.0;
                     // 将另一个状态为1的扇叶也变为4
                     power_rune->SetFanState(mode2_fan2, 4);
                     mode2_phase = Mode2Phase::WAIT_3;
                 }
             } else if (mode2_phase == Mode2Phase::WAIT_3) {
-                if (mode2_phase_timer >= 0.5) {
+                if (mode2_phase_timer >= 0.2) {
                     mode2_phase_timer = 0.0;
                     // 更新比例
                     mode2_ratio += 0.2;
