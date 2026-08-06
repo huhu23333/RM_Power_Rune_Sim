@@ -1,8 +1,7 @@
 build/
 .vscode/
 .continue/
-screenshot/*.png
-screenshot/*.mkv
+screenshot/*
 *.png~
 *.kra~
 __pycache__

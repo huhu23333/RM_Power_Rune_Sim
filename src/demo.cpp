@@ -17,6 +17,10 @@
 #include <memory>
 #include <ctime>
 #include <random>
+#include <fstream>
+#include <filesystem>
+#include <iomanip>
+#include <chrono>
 
 // -----------------------------------------------------------------------------
 // 主函数
@@ -100,6 +104,11 @@ int main(int argc, char* argv[])
     uint64_t video_start_ticks = 0;
     int video_frame_index = 0;
 
+    // 相机位姿记录文件
+    std::ofstream pose_file;
+    std::chrono::steady_clock::time_point last_video_write_time;
+    bool first_video_frame = true;
+
     // 视频合成用离屏纹理（背景色 + 缩放的离屏内容 = 最终显示画面）
     SDL_Texture* video_compose_tex = nullptr;
     if (video_enabled) {
@@ -118,9 +127,16 @@ int main(int argc, char* argv[])
         std::tm* local_tm = std::localtime(&now);
         char timestamp[32];
         std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", local_tm);
+
+        // 创建 screenshot 下的新文件夹
+        char folder_path[256];
+        std::snprintf(folder_path, sizeof(folder_path), "screenshot/demo_%s", timestamp);
+        std::filesystem::create_directories(folder_path);
+
+        // 视频文件路径
         char video_filename[256];
         std::snprintf(video_filename, sizeof(video_filename),
-                      "screenshot/demo_video_%s.mkv", timestamp);
+                      "%s/demo_video_%s.mkv", folder_path, timestamp);
         if (!video_writer->open(video_filename, VID_WIDTH, VID_HEIGHT, VID_FPS, 8000000)) {
             SDL_Log("Failed to open video writer, video output disabled");
             video_writer.reset();
@@ -129,6 +145,18 @@ int main(int argc, char* argv[])
             SDL_Log("Video output enabled: %s (%dx%d @ %.1f fps)",
                     video_filename, VID_WIDTH, VID_HEIGHT, VID_FPS);
             video_start_ticks = SDL_GetTicks();
+
+            // 打开相机位姿记录文件
+            char pose_filename[256];
+            std::snprintf(pose_filename, sizeof(pose_filename),
+                          "%s/camera_pose.txt", folder_path);
+            pose_file.open(pose_filename);
+            if (!pose_file.is_open()) {
+                SDL_Log("Warning: Failed to open pose file: %s", pose_filename);
+            } else {
+                pose_file << std::fixed << std::setprecision(12);
+                SDL_Log("Pose file opened: %s", pose_filename);
+            }
         }
     }
 
@@ -557,8 +585,8 @@ int main(int argc, char* argv[])
             char camera_text[256];
             std::snprintf(camera_text, sizeof(camera_text),
                 "Pos: (%.2f, %.2f, %.2f)  Yaw: %.2f  Pitch: %.2f  Roll: %.2f",
-                camera_pose.position.x, camera_pose.position.y, camera_pose.position.z,
-                camera_pose.yaw, camera_pose.pitch, camera_pose.roll);
+                camera_pose.position.x, camera_pose.position.z, -camera_pose.position.y,
+                -camera_pose.yaw, camera_pose.pitch, -camera_pose.roll);
             if (camera_text_tex) SDL_DestroyTexture(camera_text_tex);
             camera_text_tex = RenderTextToTexture(renderer, camera_text,
                 { 1.0f, 1.0f, 1.0f, 1.0f }, 1.5, 3);
@@ -663,9 +691,30 @@ int main(int argc, char* argv[])
                                      frame_surface->pixels, static_cast<size_t>(frame_surface->pitch));
                     cv::Mat bgr_mat;
                     cv::cvtColor(rgba_mat, bgr_mat, cv::COLOR_RGBA2BGR);
-                    // 异步写入（丢弃模式：队列满时丢弃该帧）
-                    video_writer->writeFrame(bgr_mat, true);
+                    // 异步写入（丢弃模式：队列满时不丢弃该帧）
+                    video_writer->writeFrame(bgr_mat, false);
                     video_frame_index = expected_frame_index;
+
+                    // 记录相机位姿到 txt 文件
+                    if (pose_file.is_open()) {
+                        double dt_pose;
+                        auto now_time = std::chrono::steady_clock::now();
+                        if (first_video_frame) {
+                            dt_pose = 0.0;
+                            first_video_frame = false;
+                        } else {
+                            dt_pose = std::chrono::duration<double>(now_time - last_video_write_time).count();
+                        }
+                        last_video_write_time = now_time;
+                        pose_file << expected_frame_index << " "
+                                  << dt_pose << " "
+                                  << camera_pose.position.x << " "
+                                  << camera_pose.position.z << " "
+                                  << -camera_pose.position.y << " "
+                                  << -camera_pose.yaw << " "
+                                  << camera_pose.pitch << " "
+                                  << -camera_pose.roll << "\n";
+                    }
                     SDL_DestroySurface(frame_surface);
                 }
             }
@@ -687,6 +736,11 @@ int main(int argc, char* argv[])
         SDL_Log("Closing video writer...");
         video_writer->close();
         video_writer.reset();
+    }
+    // 关闭相机位姿记录文件
+    if (pose_file.is_open()) {
+        pose_file.close();
+        SDL_Log("Pose file closed.");
     }
 
     // ---------- 8. 计算视频对应的相机参数 ----------
