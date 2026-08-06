@@ -108,6 +108,7 @@ int main(int argc, char* argv[])
     std::ofstream pose_file;
     std::chrono::steady_clock::time_point last_video_write_time;
     bool first_video_frame = true;
+    int pose_frame_index = 0;
 
     // 视频合成用离屏纹理（背景色 + 缩放的离屏内容 = 最终显示画面）
     SDL_Texture* video_compose_tex = nullptr;
@@ -691,29 +692,32 @@ int main(int argc, char* argv[])
                                      frame_surface->pixels, static_cast<size_t>(frame_surface->pitch));
                     cv::Mat bgr_mat;
                     cv::cvtColor(rgba_mat, bgr_mat, cv::COLOR_RGBA2BGR);
-                    // 异步写入（丢弃模式：队列满时不丢弃该帧）
-                    video_writer->writeFrame(bgr_mat, false);
+                    // 异步写入（丢弃模式：队列满时丢弃该帧）
+                    bool write_ok = video_writer->writeFrame(bgr_mat, true);
                     video_frame_index = expected_frame_index;
 
-                    // 记录相机位姿到 txt 文件
-                    if (pose_file.is_open()) {
-                        double dt_pose;
-                        auto now_time = std::chrono::steady_clock::now();
-                        if (first_video_frame) {
-                            dt_pose = 0.0;
-                            first_video_frame = false;
-                        } else {
-                            dt_pose = std::chrono::duration<double>(now_time - last_video_write_time).count();
+                    // 记录相机位姿到 txt 文件（仅在写入成功时记录）
+                    if (write_ok) {
+                        if (pose_file.is_open()) {
+                            double dt_pose;
+                            auto now_time = std::chrono::steady_clock::now();
+                            if (first_video_frame) {
+                                dt_pose = 0.0;
+                                first_video_frame = false;
+                            } else {
+                                dt_pose = std::chrono::duration<double>(now_time - last_video_write_time).count();
+                            }
+                            last_video_write_time = now_time;
+                            pose_file << pose_frame_index << " "
+                                      << dt_pose << " "
+                                      << camera_pose.position.x << " "
+                                      << camera_pose.position.z << " "
+                                      << -camera_pose.position.y << " "
+                                      << -camera_pose.yaw << " "
+                                      << camera_pose.pitch << " "
+                                      << -camera_pose.roll << "\n";
                         }
-                        last_video_write_time = now_time;
-                        pose_file << expected_frame_index << " "
-                                  << dt_pose << " "
-                                  << camera_pose.position.x << " "
-                                  << camera_pose.position.z << " "
-                                  << -camera_pose.position.y << " "
-                                  << -camera_pose.yaw << " "
-                                  << camera_pose.pitch << " "
-                                  << -camera_pose.roll << "\n";
+                        pose_frame_index++;
                     }
                     SDL_DestroySurface(frame_surface);
                 }

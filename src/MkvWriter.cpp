@@ -157,7 +157,7 @@ bool MkvAllIntraWriter::writeFrame(const cv::Mat& bgrMat, bool dropWhenFull) {
     if (frameQueue_.size() >= maxQueueSize_) {
         if (dropWhenFull) {
             // 丢弃该帧
-            return true;
+            return false;
         } else {
             // 等待队列有空间
             cvNotFull_.wait(lock, [this] { return frameQueue_.size() < maxQueueSize_ || stop_ || error_; });

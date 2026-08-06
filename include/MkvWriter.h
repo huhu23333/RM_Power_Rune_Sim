@@ -42,7 +42,7 @@ public:
      * 异步写入一帧 cv::Mat（BGR 格式）
      * @param bgrMat       OpenCV Mat，尺寸需与构造时一致
      * @param dropWhenFull 当队列已满时是否丢弃该帧
-     * @return true 成功推入队列或丢弃（如果允许），false 失败（如错误状态或关闭）
+     * @return true 成功推入队列，false 失败（如错误状态或关闭）或丢弃（如果允许）
      */
     bool writeFrame(const cv::Mat& bgrMat, bool dropWhenFull = true);
 
